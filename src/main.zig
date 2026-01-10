@@ -162,7 +162,7 @@ pub fn main() !void {
     });
     defer application.deinit(allocator);
 
-    application.window.setWireframeMode();
+    // application.window.setWireframeMode();
 
     const app_props = application.getProps();
     const game_scene = try GameScene.create(allocator, app_props);
