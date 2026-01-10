@@ -12,12 +12,13 @@ const GameScene = struct {
     transparency: f32,
     camera: runtime.Camera,
 
-    pub fn create(allocator: std.mem.Allocator) !*GameScene {
+    pub fn create(allocator: std.mem.Allocator, props: runtime.ApplicationProps) !*GameScene {
         const self = try allocator.create(GameScene);
+        const aspect = @as(f32, @floatFromInt(props.width)) / @as(f32, @floatFromInt(props.height));
         const camera = runtime.Camera.new(
             .{ .x = 0, .y = 0, .z = 5 },
             std.math.pi / 4.0,
-            1920.0 / 1080.0, // aspect ratio
+            aspect, // aspect ratio from window dimensions
             0.1, // near plane
             100.0, // far plane
             true, // is_active
@@ -123,7 +124,6 @@ const GameScene = struct {
     }
 
     pub fn onEvent(self: *GameScene, e: runtime.ZEvent) void {
-        _ = self;
         switch (e) {
             .KeyPressed => |key| {
                 std.log.info("GameScene received key: {s}", .{@tagName(key)});
@@ -133,6 +133,11 @@ const GameScene = struct {
             },
             .WindowClose => {
                 std.log.info("GameScene shutting down...", .{});
+            },
+            .WindowResize => |resize| {
+                const aspect = @as(f32, @floatFromInt(resize.width)) /
+                    @as(f32, @floatFromInt(resize.height));
+                self.camera.setAspectRatio(aspect);
             },
             else => {},
         }
@@ -157,7 +162,10 @@ pub fn main() !void {
     });
     defer application.deinit(allocator);
 
-    const game_scene = try GameScene.create(allocator);
+    application.window.setWireframeMode();
+
+    const app_props = application.getProps();
+    const game_scene = try GameScene.create(allocator, app_props);
     const scene = runtime.Scene.init(game_scene);
     try application.pushScene(scene);
 
