@@ -10,15 +10,24 @@ const GameScene = struct {
     vao: runtime.VertexArray,
     shader: runtime.Shader,
     transparency: f32,
-    position: runtime.Vec2,
+    camera: runtime.Camera,
 
     pub fn create(allocator: std.mem.Allocator) !*GameScene {
         const self = try allocator.create(GameScene);
+        const camera = runtime.Camera.new(
+            .{ .x = 0, .y = 0, .z = 5 },
+            std.math.pi / 4.0,
+            1920.0 / 1080.0, // aspect ratio
+            0.1, // near plane
+            100.0, // far plane
+            true, // is_active
+        );
+
         self.* = GameScene{
             .vao = undefined,
             .shader = undefined,
             .transparency = 0.0,
-            .position = runtime.Vec2.new(0, 0),
+            .camera = camera,
         };
         return self;
     }
@@ -27,15 +36,37 @@ const GameScene = struct {
         std.log.info("GameScene starting up...", .{});
 
         const vertices = [_]f32{
-            0.5, 0.5, 0.0, // top right
-            0.5, -0.5, 0.0, // bottom right
-            -0.5, -0.5, 0.0, // bottom left
-            -0.5, 0.5, 0.0, // top left
+            // Front face (z = 0.5)
+            -0.5, -0.5, 0.5, // 0: bottom left
+            0.5, -0.5, 0.5, // 1: bottom right
+            0.5, 0.5, 0.5, // 2: top right
+            -0.5, 0.5, 0.5, // 3: top left
+            // Back face (z = -0.5)
+            -0.5, -0.5, -0.5, // 4: bottom left
+            0.5, -0.5, -0.5, // 5: bottom right
+            0.5, 0.5, -0.5, // 6: top right
+            -0.5, 0.5, -0.5, // 7: top left
         };
 
         const indices = [_]u32{
-            0, 1, 3, // first triangle
-            1, 2, 3, // second triangle
+            // Front face
+            0, 1, 2,
+            2, 3, 0,
+            // Back face
+            5, 4, 7,
+            7, 6, 5,
+            // Left face
+            4, 0, 3,
+            3, 7, 4,
+            // Right face
+            1, 5, 6,
+            6, 2, 1,
+            // Top face
+            3, 2, 6,
+            6, 7, 3,
+            // Bottom face
+            4, 5, 1,
+            1, 0, 4,
         };
 
         self.vao = runtime.VertexArray.init(&vertices, &indices);
@@ -60,22 +91,33 @@ const GameScene = struct {
             if (self.transparency > 1.0) {
                 self.transparency = 1.0;
             }
-            self.position.x -= speed;
+            // self.position.x -= speed;
         } else if (Input.isKeyHeld(.D)) {
             self.transparency -= speed;
             if (self.transparency < 0.0) {
                 self.transparency = 0.0;
             }
-            self.position.x += speed;
-        } else if (Input.isKeyHeld(.W)) {
-            self.position.y += speed;
-        } else if (Input.isKeyHeld(.S)) {
-            self.position.y -= speed;
+            // self.position.x += speed;
+        }
+        // else if (Input.isKeyHeld(.W)) {
+        //     self.position.y += speed;
+        // } else if (Input.isKeyHeld(.S)) {
+        //     self.position.y -= speed;
+        // }
+
+        if (Input.isButtonHeld(.Left)) {
+            self.camera.pan(Input.mouse_delta.x, Input.mouse_delta.y, speed * 10);
+        } else if (Input.isButtonHeld(.Right)) {
+            self.camera.fpsLook(Input.mouse_delta.x, Input.mouse_delta.y, speed * 10);
+        }
+
+        if (Input.isScrollingY()) {
+            self.camera.zoom(Input.mouse_scroll_delta.y, speed);
         }
 
         self.shader.bind();
         self.shader.setUniform("r_color", self.transparency);
-        self.shader.setUniform("r_position", runtime.Vec3.new(self.position.x, self.position.y, 0));
+        self.shader.setUniform("r_position", self.camera.viewProjectionMatrix());
 
         runtime.RenderCommand.Draw(self.vao);
     }
