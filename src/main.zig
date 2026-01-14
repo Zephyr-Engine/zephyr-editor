@@ -9,6 +9,7 @@ const movement_speed = 0.2;
 const GameScene = struct {
     vao: runtime.VertexArray,
     shader: runtime.Shader,
+    material: runtime.Material,
     transparency: f32,
     camera: runtime.Camera,
 
@@ -27,6 +28,7 @@ const GameScene = struct {
         self.* = GameScene{
             .vao = undefined,
             .shader = undefined,
+            .material = undefined,
             .transparency = 0.0,
             .camera = camera,
         };
@@ -75,6 +77,7 @@ const GameScene = struct {
         const vs_src = @embedFile("shaders/vertex.glsl");
         const fs_src = @embedFile("shaders/fragment.glsl");
         self.shader = try runtime.Shader.init(allocator, vs_src, fs_src);
+        self.material = try runtime.Material.init(allocator, &self.shader);
 
         self.vao.setLayout(self.shader.buffer_layout);
     }
@@ -116,9 +119,8 @@ const GameScene = struct {
             self.camera.zoom(Input.mouse_scroll_delta.y, speed);
         }
 
-        self.shader.bind();
-        self.shader.setUniform("r_color", self.transparency);
-        self.shader.setUniform("r_position", self.camera.viewProjectionMatrix());
+        self.material.setUniform("r_color", self.transparency);
+        self.material.setUniform("r_position", self.camera.viewProjectionMatrix());
 
         runtime.RenderCommand.Draw(self.vao);
     }
@@ -146,6 +148,7 @@ const GameScene = struct {
     pub fn onCleanup(self: *GameScene, allocator: std.mem.Allocator) void {
         std.log.info("GameScene cleaning up...", .{});
         self.shader.deinit(allocator);
+        self.material.deinit();
         allocator.destroy(self);
     }
 };
