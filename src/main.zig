@@ -147,7 +147,7 @@ const GameScene = struct {
 
     pub fn onCleanup(self: *GameScene, allocator: std.mem.Allocator) void {
         std.log.info("GameScene cleaning up...", .{});
-        self.shader.deinit(allocator);
+        self.shader.deinit();
         self.material.deinit();
         allocator.destroy(self);
     }
