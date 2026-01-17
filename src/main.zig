@@ -1,5 +1,6 @@
 const std = @import("std");
 const runtime = @import("zephyr_runtime");
+const obj = runtime.obj;
 const Input = runtime.Input;
 
 pub const std_options = runtime.recommended_std_options;
@@ -38,44 +39,13 @@ const GameScene = struct {
     pub fn onStartup(self: *GameScene, allocator: std.mem.Allocator) !void {
         std.log.info("GameScene starting up...", .{});
 
-        const vertices = [_]f32{
-            // Front face (z = 0.5)
-            -0.5, -0.5, 0.5, // 0: bottom left
-            0.5, -0.5, 0.5, // 1: bottom right
-            0.5, 0.5, 0.5, // 2: top right
-            -0.5, 0.5, 0.5, // 3: top left
-            // Back face (z = -0.5)
-            -0.5, -0.5, -0.5, // 4: bottom left
-            0.5, -0.5, -0.5, // 5: bottom right
-            0.5, 0.5, -0.5, // 6: top right
-            -0.5, 0.5, -0.5, // 7: top left
-        };
+        var mesh = try obj.parse(allocator, @embedFile("assets/meshes/monkey.obj"));
+        defer mesh.deinit();
 
-        const indices = [_]u32{
-            // Front face
-            0, 1, 2,
-            2, 3, 0,
-            // Back face
-            5, 4, 7,
-            7, 6, 5,
-            // Left face
-            4, 0, 3,
-            3, 7, 4,
-            // Right face
-            1, 5, 6,
-            6, 2, 1,
-            // Top face
-            3, 2, 6,
-            6, 7, 3,
-            // Bottom face
-            4, 5, 1,
-            1, 0, 4,
-        };
+        self.vao = runtime.VertexArray.init(mesh.vertices, mesh.indices);
 
-        self.vao = runtime.VertexArray.init(&vertices, &indices);
-
-        const vs_src = @embedFile("shaders/vertex.glsl");
-        const fs_src = @embedFile("shaders/fragment.glsl");
+        const vs_src = @embedFile("assets/shaders/vertex.glsl");
+        const fs_src = @embedFile("assets/shaders/fragment.glsl");
         self.shader = try runtime.Shader.init(allocator, vs_src, fs_src);
         self.material = try runtime.Material.init(allocator, &self.shader);
 
@@ -86,17 +56,17 @@ const GameScene = struct {
         runtime.RenderCommand.Clear(.{ .x = 0.4, .y = 0.4, .z = 0.4 });
         const speed = movement_speed * delta_time;
 
-        if (Input.isKeyPressed(.Escape)) {
+        if (Input.IsKeyPressed(.Escape)) {
             std.log.info("Escape key pressed, exiting...", .{});
-        } else if (Input.isKeyHeld(.Space)) {
+        } else if (Input.IsKeyHeld(.Space)) {
             std.log.info("Space key pressed!", .{});
-        } else if (Input.isKeyHeld(.A)) {
+        } else if (Input.IsKeyHeld(.A)) {
             self.transparency += speed;
             if (self.transparency > 1.0) {
                 self.transparency = 1.0;
             }
             // self.position.x -= speed;
-        } else if (Input.isKeyHeld(.D)) {
+        } else if (Input.IsKeyHeld(.D)) {
             self.transparency -= speed;
             if (self.transparency < 0.0) {
                 self.transparency = 0.0;
@@ -109,17 +79,20 @@ const GameScene = struct {
         //     self.position.y -= speed;
         // }
 
-        if (Input.isButtonHeld(.Left)) {
-            self.camera.pan(Input.mouse_delta.x, Input.mouse_delta.y, speed * 10);
-        } else if (Input.isButtonHeld(.Right)) {
-            self.camera.fpsLook(Input.mouse_delta.x, Input.mouse_delta.y, speed * 10);
+        if (Input.IsButtonHeld(.Left)) {
+            const delta = Input.GetMouseMoveDelta();
+            self.camera.pan(delta.x, delta.y, speed * 10);
+        } else if (Input.IsButtonHeld(.Right)) {
+            const delta = Input.GetMouseMoveDelta();
+            self.camera.fpsLook(delta.x, delta.y, speed * 10);
         }
 
-        if (Input.isScrollingY()) {
-            self.camera.zoom(Input.mouse_scroll_delta.y, speed);
+        if (Input.IsScrollingY()) {
+            const delta = Input.GetMouseScroll();
+            self.camera.zoom(delta.y, speed);
         }
 
-        self.material.setUniform("r_color", self.transparency);
+        // self.material.setUniform("r_color", self.transparency);
         self.material.setUniform("r_position", self.camera.viewProjectionMatrix());
 
         runtime.RenderCommand.Draw(self.vao);
