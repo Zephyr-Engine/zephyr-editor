@@ -1,4 +1,5 @@
 const std = @import("std");
+const math = std.math;
 const runtime = @import("zephyr_runtime");
 const RenderCommand = runtime.RenderCommand;
 const Input = runtime.Input;
@@ -8,8 +9,12 @@ pub const std_options = runtime.recommended_std_options;
 
 const movement_speed = 0.2;
 
-const lightPos = runtime.Vec3{ .x = 1.2, .y = 1.0, .z = 2.0 };
-const lightColor = runtime.Vec3{ .x = 1.0, .y = 1.0, .z = 1.0 };
+var light = runtime.Light{
+    .position = .{ .x = 1.2, .y = 1.0, .z = 2.0 },
+    .ambient = .{ .x = 0.2, .y = 0.2, .z = 0.2 },
+    .diffuse = .{ .x = 0.5, .y = 0.5, .z = 0.5 },
+    .specular = .{ .x = 1.0, .y = 1.0, .z = 1.0 },
+};
 
 const GameScene = struct {
     model: runtime.Model,
@@ -55,9 +60,6 @@ const GameScene = struct {
             .shininess = 32.0,
         });
 
-        self.material_instance.setUniform("lightColor", lightColor);
-        self.material_instance.setUniform("lightPos", lightPos);
-
         self.model = try runtime.Model.init(allocator, obj_src, &self.material_instance, .zero);
     }
 
@@ -88,6 +90,19 @@ const GameScene = struct {
             self.camera.zoom(delta.y, speed);
         }
 
+        // const time: f32 = @floatCast(runtime.Window.GetTime());
+        // const lightColor: runtime.Vec3 = .{
+        //     .x = math.sin(time * 2.0),
+        //     .y = math.sin(time * 0.7),
+        //     .z = math.sin(time * 1.3),
+        // };
+        // light.diffuse = lightColor.mul(runtime.Vec3.all(0.5));
+        // light.ambient = light.diffuse.mul(runtime.Vec3.all(0.5));
+
+        self.material_instance.setUniform("light.position", light.position);
+        self.material_instance.setUniform("light.ambient", light.ambient);
+        self.material_instance.setUniform("light.diffuse", light.diffuse);
+        self.material_instance.setUniform("light.specular", light.specular);
         RenderCommand.Draw(&self.model, &self.camera);
     }
 
