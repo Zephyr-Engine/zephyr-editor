@@ -9,13 +9,13 @@ pub const std_options = runtime.recommended_std_options;
 const movement_speed = 0.2;
 
 const lightPos = runtime.Vec3{ .x = 1.2, .y = 1.0, .z = 2.0 };
-const objectColor = runtime.Vec3{ .x = 0.64, .y = 0.14, .z = 0.43 };
 const lightColor = runtime.Vec3{ .x = 1.0, .y = 1.0, .z = 1.0 };
 
 const GameScene = struct {
     model: runtime.Model,
     shader: runtime.Shader,
     material: runtime.Material,
+    material_instance: runtime.MaterialInstance,
     camera: runtime.Camera,
 
     pub fn create(allocator: std.mem.Allocator, props: runtime.ApplicationProps) !*GameScene {
@@ -34,6 +34,7 @@ const GameScene = struct {
             .model = undefined,
             .shader = undefined,
             .material = undefined,
+            .material_instance = undefined,
             .camera = camera,
         };
         return self;
@@ -47,12 +48,17 @@ const GameScene = struct {
         const obj_src = @embedFile("assets/meshes/monkey.obj");
         self.shader = try runtime.Shader.init(allocator, vs_src, fs_src);
         self.material = try runtime.Material.init(allocator, &self.shader);
+        self.material_instance = self.material.instaniate(.{
+            .ambient = .{ .x = 1.0, .y = 0.5, .z = 0.31 },
+            .diffuse = .{ .x = 1.0, .y = 0.5, .z = 0.31 },
+            .specular = .{ .x = 0.5, .y = 0.5, .z = 0.5 },
+            .shininess = 32.0,
+        });
 
-        self.material.setUniform("objectColor", objectColor);
-        self.material.setUniform("lightColor", lightColor);
-        self.material.setUniform("lightPos", lightPos);
+        self.material_instance.setUniform("lightColor", lightColor);
+        self.material_instance.setUniform("lightPos", lightPos);
 
-        self.model = try runtime.Model.init(allocator, obj_src, &self.material, .zero);
+        self.model = try runtime.Model.init(allocator, obj_src, &self.material_instance, .zero);
     }
 
     pub fn onUpdate(self: *GameScene, delta_time: f32) void {
