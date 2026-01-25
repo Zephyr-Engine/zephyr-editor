@@ -151,7 +151,7 @@ pub fn main() !void {
     const app_props = application.getProps();
     const game_scene = try GameScene.create(allocator, app_props);
     const scene = runtime.Scene.init(game_scene);
-    try application.pushScene(scene);
+    application.pushScene(scene);
 
     application.run();
 }
