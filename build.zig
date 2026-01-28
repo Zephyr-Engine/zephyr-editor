@@ -10,6 +10,21 @@ pub fn build(b: *std.Build) void {
     });
     const runtime_mod = runtime_dep.module("zephyr_runtime");
 
+    // zGUI dependency with build options
+    const zgui_debug = b.option(bool, "zgui_debug", "Enable zGUI debug features") orelse false;
+    const zgui_dep = b.dependency("zgui", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    // Create build options for zgui
+    const zgui_build_options = b.addOptions();
+    zgui_build_options.addOption(bool, "debug", zgui_debug);
+
+    // Get the zgui module and add build options
+    const zgui_module = zgui_dep.module("zgui");
+    zgui_module.addOptions("build_options", zgui_build_options);
+
     const exe = b.addExecutable(.{
         .name = "zephyr_sandbox",
         .root_module = b.createModule(.{
@@ -18,6 +33,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "zephyr_runtime", .module = runtime_mod },
+                .{ .name = "zgui", .module = zgui_module },
             },
         }),
     });
