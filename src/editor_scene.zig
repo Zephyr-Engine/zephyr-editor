@@ -5,13 +5,13 @@ const zgui = @import("zgui");
 const RenderCommand = runtime.RenderCommand;
 const Framebuffer = runtime.Framebuffer;
 
-// Local GUI adapters (zgui is a sandbox dependency, not runtime)
-const ZephyrGuiRenderer = @import("gui/zgui_renderer.zig").ZephyrGuiRenderer;
+// Local input bridge (translates runtime events to zgui input)
 const InputBridge = @import("gui/input_bridge.zig").InputBridge;
 
 const GuiContext = zgui.GuiContext;
 const Renderer = zgui.Renderer;
 const TextureHandle = zgui.TextureHandle;
+const opengl = zgui.opengl;
 const PlatformCallbacks = zgui.PlatformCallbacks;
 const CursorShape = zgui.CursorShape;
 const Rect = zgui.shapes.Rect;
@@ -37,30 +37,29 @@ const menu_height: f32 = 50;
 // Layout persistence file
 const layout_file = "editor_layout.txt";
 
-// GLFW access for cursor management
-const glfw = runtime.c.glfw;
+// Window and cursor types from runtime
+const Window = runtime.Window;
+const Cursor = runtime.Cursor;
+const RuntimeCursorShape = runtime.CursorShape;
 
-// GLFW cursor handles (created once during init)
-var glfw_arrow: ?*glfw.GLFWcursor = null;
-var glfw_ibeam: ?*glfw.GLFWcursor = null;
-var glfw_hand: ?*glfw.GLFWcursor = null;
-var glfw_hresize: ?*glfw.GLFWcursor = null;
-var glfw_vresize: ?*glfw.GLFWcursor = null;
-var glfw_crosshair: ?*glfw.GLFWcursor = null;
+// Cursor handles (created once during init)
+var cursor_arrow: ?*Cursor = null;
+var cursor_ibeam: ?*Cursor = null;
+var cursor_hand: ?*Cursor = null;
+var cursor_hresize: ?*Cursor = null;
+var cursor_vresize: ?*Cursor = null;
+var cursor_crosshair: ?*Cursor = null;
 
 fn setCursorCallback(shape: CursorShape) void {
-    const window = glfw.glfwGetCurrentContext();
-    if (window == null) return;
-
     const cursor = switch (shape) {
-        .arrow => glfw_arrow,
-        .ibeam => glfw_ibeam,
-        .hand => glfw_hand,
-        .hresize => glfw_hresize,
-        .vresize => glfw_vresize,
-        .crosshair => glfw_crosshair,
+        .arrow => cursor_arrow,
+        .ibeam => cursor_ibeam,
+        .hand => cursor_hand,
+        .hresize => cursor_hresize,
+        .vresize => cursor_vresize,
+        .crosshair => cursor_crosshair,
     };
-    glfw.glfwSetCursor(window, cursor);
+    Window.setCurrentContextCursor(cursor);
 }
 
 /// Editor scene that combines game rendering with zGUI docking-based editor UI
@@ -68,8 +67,7 @@ pub const EditorScene = struct {
     allocator: std.mem.Allocator,
 
     // GUI
-    gui_renderer: *ZephyrGuiRenderer,
-    renderer_interface: Renderer,
+    renderer: Renderer,
     gui_ctx: *GuiContext,
     input_bridge: InputBridge,
 
@@ -106,15 +104,12 @@ pub const EditorScene = struct {
         const width: f32 = @floatFromInt(props.width);
         const height: f32 = @floatFromInt(props.height);
 
-        // Create GUI renderer
-        const gui_renderer = try allocator.create(ZephyrGuiRenderer);
-        gui_renderer.* = ZephyrGuiRenderer.init(allocator);
+        // Create GUI renderer using zgui's embedded OpenGL renderer
+        const renderer = try opengl.createEmbeddedRenderer(allocator);
 
-        // Store renderer_interface on self first so pointer is stable
         self.* = EditorScene{
             .allocator = allocator,
-            .gui_renderer = gui_renderer,
-            .renderer_interface = gui_renderer.createInterface(),
+            .renderer = renderer,
             .gui_ctx = undefined,
             .input_bridge = undefined,
             .event_buffer = undefined,
@@ -135,15 +130,15 @@ pub const EditorScene = struct {
             .game_material_instance = null,
         };
 
-        // Create GLFW cursors (GLFW is already initialized by the runtime)
-        glfw_arrow = glfw.glfwCreateStandardCursor(glfw.GLFW_ARROW_CURSOR);
-        glfw_ibeam = glfw.glfwCreateStandardCursor(glfw.GLFW_IBEAM_CURSOR);
-        glfw_hand = glfw.glfwCreateStandardCursor(glfw.GLFW_HAND_CURSOR);
-        glfw_hresize = glfw.glfwCreateStandardCursor(glfw.GLFW_HRESIZE_CURSOR);
-        glfw_vresize = glfw.glfwCreateStandardCursor(glfw.GLFW_VRESIZE_CURSOR);
-        glfw_crosshair = glfw.glfwCreateStandardCursor(glfw.GLFW_CROSSHAIR_CURSOR);
+        // Create cursors using runtime Window API
+        cursor_arrow = Window.createStandardCursor(.arrow);
+        cursor_ibeam = Window.createStandardCursor(.ibeam);
+        cursor_hand = Window.createStandardCursor(.hand);
+        cursor_hresize = Window.createStandardCursor(.hresize);
+        cursor_vresize = Window.createStandardCursor(.vresize);
+        cursor_crosshair = Window.createStandardCursor(.crosshair);
 
-        // Now create GUI context using pointer to self.renderer_interface (heap-stable)
+        // Now create GUI context using pointer to self.renderer (heap-stable)
         const platform = PlatformCallbacks{
             .getTime = getTime,
             .setCursor = setCursorCallback,
@@ -152,7 +147,7 @@ pub const EditorScene = struct {
         const gui_ctx = try allocator.create(GuiContext);
         gui_ctx.* = try GuiContext.initEmbedded(
             allocator,
-            &self.renderer_interface,
+            &self.renderer,
             font_data,
             platform,
         );
@@ -161,11 +156,11 @@ pub const EditorScene = struct {
 
         // Set cursor pointers on gui_ctx so pointer-based setCursor() can
         // distinguish between cursor types in embedded mode
-        gui_ctx.arrow_cursor = @ptrCast(glfw_arrow);
-        gui_ctx.hand_cursor = @ptrCast(glfw_hand);
-        gui_ctx.hresize_cursor = @ptrCast(glfw_hresize);
-        gui_ctx.vresize_cursor = @ptrCast(glfw_vresize);
-        gui_ctx.ibeam_cursor = @ptrCast(glfw_ibeam);
+        gui_ctx.arrow_cursor = @ptrCast(cursor_arrow);
+        gui_ctx.hand_cursor = @ptrCast(cursor_hand);
+        gui_ctx.hresize_cursor = @ptrCast(cursor_hresize);
+        gui_ctx.vresize_cursor = @ptrCast(cursor_vresize);
+        gui_ctx.ibeam_cursor = @ptrCast(cursor_ibeam);
 
         self.gui_ctx = gui_ctx;
 
@@ -178,7 +173,7 @@ pub const EditorScene = struct {
         self.game_framebuffer = try Framebuffer.init(fb_width, fb_height);
 
         // Wrap framebuffer texture for GUI display
-        self.game_texture_handle = self.renderer_interface.wrapTexture(
+        self.game_texture_handle = self.renderer.wrapTexture(
             self.game_framebuffer.getColorTexture(),
             fb_width,
             fb_height,
@@ -308,10 +303,9 @@ pub const EditorScene = struct {
         Framebuffer.unbind();
 
         // 2. Set viewport to framebuffer size, clear
-        const gl = runtime.c.glad;
         const fb_w: i32 = @intCast(self.fb_width);
         const fb_h: i32 = @intCast(self.fb_height);
-        gl.glViewport(0, 0, fb_w, fb_h);
+        RenderCommand.SetViewport(0, 0, fb_w, fb_h);
         RenderCommand.Clear(.{ .x = 0.15, .y = 0.15, .z = 0.18 });
 
         // 3. newFrame() → replay buffered events → finalizeInjectedInput()
@@ -339,7 +333,7 @@ pub const EditorScene = struct {
         self.docking_ctx.render(self.gui_ctx) catch {};
 
         // 7. Render frame (includes dropdown overlays)
-        self.gui_ctx.render(&self.renderer_interface, fb_w, fb_h);
+        self.gui_ctx.render(&self.renderer, fb_w, fb_h);
     }
 
     fn renderMenuBar(self: *EditorScene) void {
@@ -431,10 +425,9 @@ pub const EditorScene = struct {
 
         self.docking_ctx.deinit();
         self.game_framebuffer.deinit();
-        self.gui_renderer.deinit();
+        self.renderer.deinit();
         self.gui_ctx.deinit();
 
-        allocator.destroy(self.gui_renderer);
         allocator.destroy(self.gui_ctx);
         allocator.destroy(self);
     }
@@ -451,7 +444,7 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
     if (new_width != self.game_framebuffer.width or new_height != self.game_framebuffer.height) {
         if (new_width > 0 and new_height > 0) {
             self.game_framebuffer.resize(new_width, new_height) catch {};
-            self.game_texture_handle = self.renderer_interface.wrapTexture(
+            self.game_texture_handle = self.renderer.wrapTexture(
                 self.game_framebuffer.getColorTexture(),
                 new_width,
                 new_height,
