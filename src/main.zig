@@ -13,6 +13,7 @@ pub fn main() !void {
         .width = 1920,
         .height = 1080,
         .title = "Zephyr Editor",
+        .samples = 4,
     });
     defer application.deinit(allocator);
 

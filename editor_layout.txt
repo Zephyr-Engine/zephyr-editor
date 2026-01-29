@@ -1,4 +1,4 @@
-split horizontal 0.260153
+split horizontal 0.185415
   tabgroup 0 6642745922151558057
   split horizontal 0.690658
     split vertical 0.758840
