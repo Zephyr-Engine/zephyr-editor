@@ -1,7 +1,8 @@
 const std = @import("std");
 const runtime = @import("zephyr_runtime");
+const build_options = @import("build_options");
 const GameScene = @import("game_scene.zig").GameScene;
-const Editor = @import("editor.zig").Editor;
+const Editor = if (!build_options.release) @import("editor.zig").Editor else struct {};
 
 pub const std_options = runtime.recommended_std_options;
 
@@ -21,8 +22,13 @@ pub fn main() !void {
     const app_props = application.getProps();
     const game_scene = try GameScene.create(allocator, app_props);
 
-    var editor = try Editor.init(allocator, application, runtime.Scene.init(game_scene));
-    defer editor.deinit();
+    if (build_options.release) {
+        application.pushScene(runtime.Scene.init(game_scene));
+        application.run();
+    } else {
+        var editor = try Editor.init(allocator, application, runtime.Scene.init(game_scene));
+        defer editor.deinit();
 
-    editor.run();
+        editor.run();
+    }
 }
