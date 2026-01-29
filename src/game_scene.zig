@@ -1,18 +1,18 @@
 const std = @import("std");
 const runtime = @import("zephyr_runtime");
 
+const Input = runtime.Input;
 const RenderCommand = runtime.RenderCommand;
 
-/// Standalone game scene implementing the Scene interface.
-/// Contains all game logic: camera, model, shaders, materials, rendering.
-/// Renders to whatever is currently bound (screen or FBO — the scene doesn't know or care).
+const movement_speed = 0.2;
+
 pub const GameScene = struct {
     allocator: std.mem.Allocator,
     camera: runtime.Camera,
-    model: ?runtime.Model = null,
-    shader: ?runtime.Shader = null,
-    material: ?runtime.Material = null,
-    material_instance: ?runtime.MaterialInstance = null,
+    model: runtime.Model = undefined,
+    shader: runtime.Shader = undefined,
+    material: runtime.Material = undefined,
+    material_instance: runtime.MaterialInstance = undefined,
 
     pub fn create(allocator: std.mem.Allocator, props: runtime.ApplicationProps) !*GameScene {
         const self = try allocator.create(GameScene);
@@ -44,39 +44,58 @@ pub const GameScene = struct {
         const obj_src = @embedFile("assets/meshes/monkey.obj");
 
         self.shader = try runtime.Shader.init(allocator, vs_src, fs_src);
-        self.material = try runtime.Material.init(allocator, &self.shader.?);
-        self.material_instance = self.material.?.instaniate(.{
+        self.material = try runtime.Material.init(allocator, &self.shader);
+        self.material_instance = self.material.instaniate(.{
             .ambient = .{ .x = 1.0, .y = 0.5, .z = 0.31 },
             .diffuse = .{ .x = 1.0, .y = 0.5, .z = 0.31 },
             .specular = .{ .x = 0.5, .y = 0.5, .z = 0.5 },
             .shininess = 32.0,
         });
 
-        self.model = try runtime.Model.init(allocator, obj_src, &self.material_instance.?, .zero);
+        self.model = try runtime.Model.init(allocator, obj_src, &self.material_instance, .zero);
     }
 
     pub fn onUpdate(self: *GameScene, delta_time: f32) void {
-        _ = delta_time;
+        const speed = movement_speed * delta_time;
 
         RenderCommand.Clear(.{ .x = 0.1, .y = 0.1, .z = 0.15 });
 
-        if (self.model) |*model| {
-            const light = runtime.Light{
-                .position = .{ .x = 1.2, .y = 1.0, .z = 2.0 },
-                .ambient = .{ .x = 0.2, .y = 0.2, .z = 0.2 },
-                .diffuse = .{ .x = 0.5, .y = 0.5, .z = 0.5 },
-                .specular = .{ .x = 1.0, .y = 1.0, .z = 1.0 },
-            };
-
-            if (self.material_instance) |*mat_inst| {
-                mat_inst.setUniform("light.position", light.position);
-                mat_inst.setUniform("light.ambient", light.ambient);
-                mat_inst.setUniform("light.diffuse", light.diffuse);
-                mat_inst.setUniform("light.specular", light.specular);
-            }
-
-            RenderCommand.Draw(model, &self.camera);
+        if (Input.IsKeyHeld(.A)) {
+            self.model.position.x -= speed;
+        } else if (Input.IsKeyHeld(.D)) {
+            self.model.position.x += speed;
+        } else if (Input.IsKeyHeld(.W)) {
+            self.model.position.z += speed;
+        } else if (Input.IsKeyHeld(.S)) {
+            self.model.position.z -= speed;
         }
+
+        if (Input.IsButtonHeld(.Left)) {
+            const delta = Input.GetMouseMoveDelta();
+            self.camera.pan(delta.x, delta.y, speed * 10);
+        } else if (Input.IsButtonHeld(.Right)) {
+            const delta = Input.GetMouseMoveDelta();
+            self.camera.fpsLook(delta.x, delta.y, speed * 10);
+        }
+
+        if (Input.IsScrollingY()) {
+            const delta = Input.GetMouseScroll();
+            self.camera.zoom(delta.y, speed);
+        }
+
+        const light = runtime.Light{
+            .position = .{ .x = 1.2, .y = 1.0, .z = 2.0 },
+            .ambient = .{ .x = 0.2, .y = 0.2, .z = 0.2 },
+            .diffuse = .{ .x = 0.5, .y = 0.5, .z = 0.5 },
+            .specular = .{ .x = 1.0, .y = 1.0, .z = 1.0 },
+        };
+
+        self.material_instance.setUniform("light.position", light.position);
+        self.material_instance.setUniform("light.ambient", light.ambient);
+        self.material_instance.setUniform("light.diffuse", light.diffuse);
+        self.material_instance.setUniform("light.specular", light.specular);
+
+        RenderCommand.Draw(&self.model, &self.camera);
     }
 
     pub fn onEvent(self: *GameScene, e: runtime.ZEvent) void {
@@ -95,12 +114,8 @@ pub const GameScene = struct {
     pub fn onCleanup(self: *GameScene, allocator: std.mem.Allocator) void {
         std.log.info("GameScene cleaning up...", .{});
 
-        if (self.shader) |*shader| {
-            shader.deinit();
-        }
-        if (self.material) |*material| {
-            material.deinit();
-        }
+        self.shader.deinit();
+        self.material.deinit();
 
         allocator.destroy(self);
     }
