@@ -4,8 +4,10 @@ const zgui = @import("zgui");
 
 const RenderCommand = runtime.RenderCommand;
 const Framebuffer = runtime.Framebuffer;
+const Window = runtime.Window;
+const Cursor = runtime.Cursor;
+const Input = runtime.Input;
 
-// Local input bridge (translates runtime events to zgui input)
 const InputBridge = @import("gui/input_bridge.zig").InputBridge;
 
 const GuiContext = zgui.GuiContext;
@@ -24,10 +26,6 @@ const utils = zgui.utils;
 // Embedded font data
 const font_data = @embedFile("assets/fonts/RobotoMono-Regular.ttf");
 
-// File-scope var to allow panel render callbacks to access the EditorScene.
-// Only one EditorScene exists, so a file-scope var is clean enough.
-var editor_instance: ?*EditorScene = null;
-
 // Menu dropdown options
 const file_options = [_][]const u8{ "New", "Open", "Save", "Save As", "Exit" };
 const edit_options = [_][]const u8{ "Undo", "Redo", "Cut", "Copy", "Paste" };
@@ -37,10 +35,8 @@ const menu_height: f32 = 50;
 // Layout persistence file
 const layout_file = "editor_layout.txt";
 
-// Window and cursor types from runtime
-const Window = runtime.Window;
-const Cursor = runtime.Cursor;
-const RuntimeCursorShape = runtime.CursorShape;
+// File-scope var to allow panel render callbacks to access the Editor.
+var editor_instance: ?*Editor = null;
 
 // Cursor handles (created once during init)
 var cursor_arrow: ?*Cursor = null;
@@ -62,17 +58,30 @@ fn setCursorCallback(shape: CursorShape) void {
     Window.setCurrentContextCursor(cursor);
 }
 
-/// Editor scene that combines game rendering with zGUI docking-based editor UI
-pub const EditorScene = struct {
+fn getTime() f64 {
+    return Window.GetTime();
+}
+
+/// File-scope event callback set on the Application's window.
+fn editorEventCallback(app: *runtime.Application, e: runtime.ZEvent) void {
+    _ = app;
+    Input.Update(e);
+    if (editor_instance) |editor| {
+        editor.handleEvent(e);
+    }
+}
+
+/// Editor application that wraps any Scene with a docking-based editor GUI.
+/// The Editor is NOT a scene — it has its own run() method that replaces application.run().
+pub const Editor = struct {
+    app: *runtime.Application,
+    scene: runtime.Scene,
     allocator: std.mem.Allocator,
 
     // GUI
     renderer: Renderer,
     gui_ctx: *GuiContext,
     input_bridge: InputBridge,
-
-    // Event buffer - events are buffered in onEvent and replayed after newFrame()
-    // to avoid beginFrame() clearing per-frame input state before widgets read it
     event_buffer: [64]runtime.ZEvent,
     event_count: usize,
 
@@ -82,6 +91,7 @@ pub const EditorScene = struct {
     // Game rendering
     game_framebuffer: Framebuffer,
     game_texture_handle: TextureHandle,
+    fbo_size_changed: bool,
 
     // Dimensions (logical = window size, fb = framebuffer/physical size)
     window_width: f32,
@@ -91,23 +101,26 @@ pub const EditorScene = struct {
     content_scale_x: f32,
     content_scale_y: f32,
 
-    // Game state
-    game_camera: runtime.Camera,
-    game_model: ?runtime.Model,
-    game_shader: ?runtime.Shader,
-    game_material: ?runtime.Material,
-    game_material_instance: ?runtime.MaterialInstance,
+    // Run loop control
+    running: bool,
 
-    pub fn create(allocator: std.mem.Allocator, props: runtime.ApplicationProps) !*EditorScene {
-        const self = try allocator.create(EditorScene);
+    // Simple time tracking
+    delta_time: f32,
+    last_frame: f32,
 
+    pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene) !*Editor {
+        const self = try allocator.create(Editor);
+
+        const props = app.getProps();
         const width: f32 = @floatFromInt(props.width);
         const height: f32 = @floatFromInt(props.height);
 
         // Create GUI renderer using zgui's embedded OpenGL renderer
         const renderer = try opengl.createEmbeddedRenderer(allocator);
 
-        self.* = EditorScene{
+        self.* = Editor{
+            .app = app,
+            .scene = scene,
             .allocator = allocator,
             .renderer = renderer,
             .gui_ctx = undefined,
@@ -117,20 +130,19 @@ pub const EditorScene = struct {
             .docking_ctx = undefined,
             .game_framebuffer = undefined,
             .game_texture_handle = undefined,
+            .fbo_size_changed = false,
             .window_width = width,
             .window_height = height,
             .fb_width = props.fb_width,
             .fb_height = props.fb_height,
             .content_scale_x = props.content_scale_x,
             .content_scale_y = props.content_scale_y,
-            .game_camera = undefined,
-            .game_model = null,
-            .game_shader = null,
-            .game_material = null,
-            .game_material_instance = null,
+            .running = true,
+            .delta_time = 0.0,
+            .last_frame = 0.0,
         };
 
-        // Create cursors using runtime Window API
+        // Create cursors
         cursor_arrow = Window.createStandardCursor(.arrow);
         cursor_ibeam = Window.createStandardCursor(.ibeam);
         cursor_hand = Window.createStandardCursor(.hand);
@@ -138,7 +150,7 @@ pub const EditorScene = struct {
         cursor_vresize = Window.createStandardCursor(.vresize);
         cursor_crosshair = Window.createStandardCursor(.crosshair);
 
-        // Now create GUI context using pointer to self.renderer (heap-stable)
+        // Create GUI context
         const platform = PlatformCallbacks{
             .getTime = getTime,
             .setCursor = setCursorCallback,
@@ -154,8 +166,6 @@ pub const EditorScene = struct {
         gui_ctx.setWindowSize(width, height);
         gui_ctx.updateContentScale(props.content_scale_x, props.content_scale_y);
 
-        // Set cursor pointers on gui_ctx so pointer-based setCursor() can
-        // distinguish between cursor types in embedded mode
         gui_ctx.arrow_cursor = @ptrCast(cursor_arrow);
         gui_ctx.hand_cursor = @ptrCast(cursor_hand);
         gui_ctx.hresize_cursor = @ptrCast(cursor_hresize);
@@ -177,17 +187,6 @@ pub const EditorScene = struct {
             self.game_framebuffer.getColorTexture(),
             fb_width,
             fb_height,
-        );
-
-        // Create game camera
-        const aspect = @as(f32, @floatFromInt(fb_width)) / @as(f32, @floatFromInt(fb_height));
-        self.game_camera = runtime.Camera.new(
-            .{ .x = 0, .y = 0, .z = 5 },
-            std.math.pi / 4.0,
-            aspect,
-            0.1,
-            100.0,
-            true,
         );
 
         // Initialize docking context with bounds below menu bar
@@ -239,7 +238,6 @@ pub const EditorScene = struct {
         // Try to load saved layout, otherwise add all panels
         const layout_loaded = try self.docking_ctx.loadLayout(layout_file);
         if (!layout_loaded) {
-            // No saved layout - add all panels
             try self.docking_ctx.addPanel(utils.id("scene"));
             try self.docking_ctx.addPanel(utils.id("hierarchy"));
             try self.docking_ctx.addPanel(utils.id("inspector"));
@@ -249,66 +247,87 @@ pub const EditorScene = struct {
         // Set file-scope instance for panel render callbacks
         editor_instance = self;
 
+        // Replace Application's event callback with our own
+        app.window.setEventCallback(editorEventCallback, app);
+
         return self;
     }
 
-    fn getTime() f64 {
-        return runtime.Window.GetTime();
-    }
-
-    pub fn onStartup(self: *EditorScene, allocator: std.mem.Allocator) !void {
-        std.log.info("EditorScene starting up...", .{});
-
-        const vs_src = @embedFile("assets/shaders/vertex.glsl");
-        const fs_src = @embedFile("assets/shaders/fragment.glsl");
-        const obj_src = @embedFile("assets/meshes/monkey.obj");
-
-        self.game_shader = try runtime.Shader.init(allocator, vs_src, fs_src);
-        self.game_material = try runtime.Material.init(allocator, &self.game_shader.?);
-        self.game_material_instance = self.game_material.?.instaniate(.{
-            .ambient = .{ .x = 1.0, .y = 0.5, .z = 0.31 },
-            .diffuse = .{ .x = 1.0, .y = 0.5, .z = 0.31 },
-            .specular = .{ .x = 0.5, .y = 0.5, .z = 0.5 },
-            .shininess = 32.0,
-        });
-
-        self.game_model = try runtime.Model.init(allocator, obj_src, &self.game_material_instance.?, .zero);
-    }
-
-    pub fn onUpdate(self: *EditorScene, delta_time: f32) void {
-        _ = delta_time;
-
-        // 1. Render game to framebuffer
-        self.game_framebuffer.bind();
-        RenderCommand.Clear(.{ .x = 0.1, .y = 0.1, .z = 0.15 });
-
-        if (self.game_model) |*model| {
-            const light = runtime.Light{
-                .position = .{ .x = 1.2, .y = 1.0, .z = 2.0 },
-                .ambient = .{ .x = 0.2, .y = 0.2, .z = 0.2 },
-                .diffuse = .{ .x = 0.5, .y = 0.5, .z = 0.5 },
-                .specular = .{ .x = 1.0, .y = 1.0, .z = 1.0 },
-            };
-
-            if (self.game_material_instance) |*mat_inst| {
-                mat_inst.setUniform("light.position", light.position);
-                mat_inst.setUniform("light.ambient", light.ambient);
-                mat_inst.setUniform("light.diffuse", light.diffuse);
-                mat_inst.setUniform("light.specular", light.specular);
-            }
-
-            RenderCommand.Draw(model, &self.game_camera);
+    fn handleEvent(self: *Editor, e: runtime.ZEvent) void {
+        // Buffer the event for replay after newFrame() in update.
+        if (self.event_count < self.event_buffer.len) {
+            self.event_buffer[self.event_count] = e;
+            self.event_count += 1;
         }
 
+        switch (e) {
+            .KeyPressed => |key| {
+                if (key == .Escape) {
+                    self.running = false;
+                }
+            },
+            .WindowResize => |resize| {
+                self.window_width = @floatFromInt(resize.width);
+                self.window_height = @floatFromInt(resize.height);
+                self.gui_ctx.setWindowSize(self.window_width, self.window_height);
+            },
+            .FramebufferResize => |resize| {
+                self.fb_width = resize.width;
+                self.fb_height = resize.height;
+            },
+            .ContentScaleChange => |scale| {
+                self.content_scale_x = scale.x;
+                self.content_scale_y = scale.y;
+                self.gui_ctx.updateContentScale(scale.x, scale.y);
+            },
+            else => {},
+        }
+    }
+
+    pub fn run(self: *Editor) void {
+        // Start the scene
+        self.scene.onStartup(self.allocator);
+
+        while (self.app.window.shouldCloseWindow() and self.running) {
+            const current_time: f32 = @floatCast(Window.GetTime());
+            self.delta_time = current_time - self.last_frame;
+            self.last_frame = current_time;
+
+            self.app.window.handleInput();
+            self.update(self.delta_time);
+            self.app.window.swapBuffers();
+            Input.Clear();
+        }
+
+        // Drain any remaining GLFW/Wayland events before shutdown
+        self.app.window.handleInput();
+
+        // Clean up the scene
+        self.scene.onCleanup(self.allocator);
+    }
+
+    fn update(self: *Editor, delta_time: f32) void {
+        // If FBO was resized last frame, forward a WindowResize event to the scene
+        // so it can update camera aspect ratio
+        if (self.fbo_size_changed) {
+            self.fbo_size_changed = false;
+            const fbo_w: u32 = @intCast(self.game_framebuffer.width);
+            const fbo_h: u32 = @intCast(self.game_framebuffer.height);
+            self.scene.onEvent(.{ .WindowResize = .{ .width = fbo_w, .height = fbo_h } });
+        }
+
+        // Render game to framebuffer
+        self.game_framebuffer.bind();
+        self.scene.onUpdate(delta_time);
         Framebuffer.unbind();
 
-        // 2. Set viewport to framebuffer size, clear
+        // Set viewport to physical framebuffer size, clear screen
         const fb_w: i32 = @intCast(self.fb_width);
         const fb_h: i32 = @intCast(self.fb_height);
         RenderCommand.SetViewport(0, 0, fb_w, fb_h);
         RenderCommand.Clear(.{ .x = 0.15, .y = 0.15, .z = 0.18 });
 
-        // 3. newFrame() → replay buffered events → finalizeInjectedInput()
+        // newFrame() -> replay buffered events -> finalizeInjectedInput()
         self.gui_ctx.newFrame();
 
         for (self.event_buffer[0..self.event_count]) |e| {
@@ -318,7 +337,7 @@ pub const EditorScene = struct {
 
         self.gui_ctx.finalizeInjectedInput();
 
-        // 4. Update docking bounds to fill area below menu bar
+        // Update docking bounds to fill area below menu bar
         self.docking_ctx.dock_space.bounds = Rect{
             .x = 0,
             .y = menu_height,
@@ -326,17 +345,17 @@ pub const EditorScene = struct {
             .h = self.window_height - menu_height,
         };
 
-        // 5. Render menu bar
+        // Render menu bar
         self.renderMenuBar();
 
-        // 6. Render docking system (tabs, splitters, drop zones, panel content)
+        // Render docking system (tabs, splitters, drop zones, panel content)
         self.docking_ctx.render(self.gui_ctx) catch {};
 
-        // 7. Render frame (includes dropdown overlays)
+        // Render frame (includes dropdown overlays)
         self.gui_ctx.render(&self.renderer, fb_w, fb_h);
     }
 
-    fn renderMenuBar(self: *EditorScene) void {
+    fn renderMenuBar(self: *Editor) void {
         const ctx = self.gui_ctx;
 
         // Menu bar background
@@ -372,52 +391,7 @@ pub const EditorScene = struct {
         ctx.addText(self.window_width / 2 - 60, 15, "Zephyr Editor", 16, ctx.theme.text_bright) catch {};
     }
 
-    pub fn onEvent(self: *EditorScene, e: runtime.ZEvent) void {
-        // Buffer the event for replay after newFrame() in onUpdate.
-        // This ensures per-frame input state (keys, chars) is not cleared
-        // by beginFrame() before widgets can read it.
-        if (self.event_count < self.event_buffer.len) {
-            self.event_buffer[self.event_count] = e;
-            self.event_count += 1;
-        }
-
-        // Handle events that need immediate processing (not dependent on zGUI frame timing)
-        switch (e) {
-            .KeyPressed => |key| {
-                if (key == .Escape) {
-                    runtime.Application.Shutdown();
-                }
-            },
-            .WindowResize => |resize| {
-                self.window_width = @floatFromInt(resize.width);
-                self.window_height = @floatFromInt(resize.height);
-                self.gui_ctx.setWindowSize(self.window_width, self.window_height);
-            },
-            .FramebufferResize => |resize| {
-                self.fb_width = resize.width;
-                self.fb_height = resize.height;
-            },
-            .ContentScaleChange => |scale| {
-                self.content_scale_x = scale.x;
-                self.content_scale_y = scale.y;
-                self.gui_ctx.updateContentScale(scale.x, scale.y);
-            },
-            else => {},
-        }
-    }
-
-    pub fn onCleanup(self: *EditorScene, allocator: std.mem.Allocator) void {
-        std.log.info("EditorScene cleaning up...", .{});
-
-        editor_instance = null;
-
-        if (self.game_shader) |*shader| {
-            shader.deinit();
-        }
-        if (self.game_material) |*material| {
-            material.deinit();
-        }
-
+    pub fn deinit(self: *Editor) void {
         // Save layout before cleanup
         self.docking_ctx.saveLayout(layout_file) catch |err| {
             std.log.warn("Failed to save layout: {}", .{err});
@@ -428,8 +402,25 @@ pub const EditorScene = struct {
         self.renderer.deinit();
         self.gui_ctx.deinit();
 
-        allocator.destroy(self.gui_ctx);
-        allocator.destroy(self);
+        self.allocator.destroy(self.gui_ctx);
+
+        // Destroy cursors
+        Window.destroyCursor(cursor_arrow);
+        Window.destroyCursor(cursor_ibeam);
+        Window.destroyCursor(cursor_hand);
+        Window.destroyCursor(cursor_hresize);
+        Window.destroyCursor(cursor_vresize);
+        Window.destroyCursor(cursor_crosshair);
+        cursor_arrow = null;
+        cursor_ibeam = null;
+        cursor_hand = null;
+        cursor_hresize = null;
+        cursor_vresize = null;
+        cursor_crosshair = null;
+
+        editor_instance = null;
+
+        self.allocator.destroy(self);
     }
 };
 
@@ -449,8 +440,7 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
                 new_width,
                 new_height,
             );
-            const aspect = bounds.w / bounds.h;
-            self.game_camera.setAspectRatio(aspect);
+            self.fbo_size_changed = true;
         }
     }
 
@@ -458,7 +448,7 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
     try ctx.draw_list.setTexture(self.game_texture_handle);
     try ctx.draw_list.addRectUV(
         bounds,
-        .{ 0, 1 }, // UV flipped for OpenGL FBO
+        .{ 0, 1 },
         .{ 1, 0 },
         0xFFFFFFFF,
     );
