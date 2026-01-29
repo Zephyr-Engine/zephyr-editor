@@ -22,7 +22,7 @@ pub fn main() !void {
     const app_props = application.getProps();
     const game_scene = try GameScene.create(allocator, app_props);
 
-    if (build_options.release) {
+    if (comptime build_options.release) {
         application.pushScene(runtime.Scene.init(game_scene));
         application.run();
     } else {
