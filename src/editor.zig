@@ -285,7 +285,6 @@ pub const Editor = struct {
     }
 
     pub fn run(self: *Editor) void {
-        // Start the scene
         self.scene.onStartup(self.allocator);
 
         while (self.app.window.shouldCloseWindow() and self.running) {
@@ -293,16 +292,14 @@ pub const Editor = struct {
             self.delta_time = current_time - self.last_frame;
             self.last_frame = current_time;
 
-            self.app.window.handleInput();
+            Window.HandleInput();
             self.update(self.delta_time);
             self.app.window.swapBuffers();
             Input.Clear();
         }
 
-        // Drain any remaining GLFW/Wayland events before shutdown
-        self.app.window.handleInput();
+        Window.HandleInput();
 
-        // Clean up the scene
         self.scene.onCleanup(self.allocator);
     }
 

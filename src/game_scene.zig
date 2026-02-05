@@ -2,6 +2,8 @@ const std = @import("std");
 const runtime = @import("zephyr_runtime");
 
 const Input = runtime.Input;
+const AssetHandle = runtime.AssetHandle;
+const AssetManager = runtime.AssetManager;
 const RenderCommand = runtime.RenderCommand;
 
 const movement_speed = 0.2;
@@ -9,7 +11,7 @@ const movement_speed = 0.2;
 pub const GameScene = struct {
     allocator: std.mem.Allocator,
     camera: runtime.Camera,
-    model: runtime.Model = undefined,
+    model: runtime.AssetHandle = undefined,
     shader: runtime.Shader = undefined,
     material: runtime.Material = undefined,
     material_instance: runtime.MaterialInstance = undefined,
@@ -52,7 +54,11 @@ pub const GameScene = struct {
             .shininess = 32.0,
         });
 
-        self.model = try runtime.Model.init(allocator, obj_src, &self.material_instance, .zero);
+        const model = try runtime.Model.init(allocator, obj_src, &self.material_instance, .zero);
+        self.model = AssetManager.PushModel(allocator, model) catch |err| {
+            std.log.err("Failed to push model: {}", .{err});
+            return;
+        };
     }
 
     pub fn onUpdate(self: *GameScene, delta_time: f32) void {
@@ -60,14 +66,15 @@ pub const GameScene = struct {
 
         RenderCommand.Clear(.{ .x = 0.1, .y = 0.1, .z = 0.15 });
 
+        var model = AssetManager.GetModel(self.model);
         if (Input.IsKeyHeld(.A)) {
-            self.model.position.x -= speed;
+            model.position.x -= speed;
         } else if (Input.IsKeyHeld(.D)) {
-            self.model.position.x += speed;
+            model.position.x += speed;
         } else if (Input.IsKeyHeld(.W)) {
-            self.model.position.z += speed;
+            model.position.z += speed;
         } else if (Input.IsKeyHeld(.S)) {
-            self.model.position.z -= speed;
+            model.position.z -= speed;
         }
 
         if (Input.IsButtonHeld(.Left)) {
@@ -95,7 +102,7 @@ pub const GameScene = struct {
         self.material_instance.setUniform("light.diffuse", light.diffuse);
         self.material_instance.setUniform("light.specular", light.specular);
 
-        RenderCommand.Draw(&self.model, &self.camera);
+        RenderCommand.Draw(&self.camera);
     }
 
     pub fn onEvent(self: *GameScene, e: runtime.ZEvent) void {
