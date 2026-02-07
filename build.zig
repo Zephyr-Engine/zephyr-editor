@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
     const runtime_dep = b.dependency("zephyr_runtime", .{
         .target = target,
         .optimize = optimize,
+        .editor = !release,
     });
     const runtime_mod = runtime_dep.module("zephyr_runtime");
 
