@@ -8,6 +8,8 @@ const Window = runtime.Window;
 const Cursor = runtime.Cursor;
 const Input = runtime.Input;
 const Camera = runtime.Camera;
+const Shader = runtime.Shader;
+const AssetManager = runtime.AssetManager;
 
 const InputBridge = @import("gui/input_bridge.zig").InputBridge;
 
@@ -27,6 +29,11 @@ const utils = zgui.utils;
 
 // Embedded font data
 const font_data = @embedFile("assets/fonts/RobotoMono-Regular.ttf");
+
+// Embedded shader sources for picking and outline
+const utility_vertex_src = @embedFile("assets/shaders/utility_vertex.glsl");
+const picking_fragment_src = @embedFile("assets/shaders/picking_fragment.glsl");
+const outline_fragment_src = @embedFile("assets/shaders/outline_fragment.glsl");
 
 // Menu dropdown options
 const file_options = [_][]const u8{ "New", "Open", "Save", "Save As", "Exit" };
@@ -119,6 +126,14 @@ pub const Editor = struct {
     saved_game_camera: Camera,
     scene_panel_bounds: Rect,
 
+    // Object selection & outline
+    selected_object: ?usize,
+    picking_framebuffer: Framebuffer,
+    picking_shader: Shader,
+    picking_uniforms: std.StringHashMap(i32),
+    outline_shader: Shader,
+    outline_uniforms: std.StringHashMap(i32),
+
     pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene, scene_camera: *Camera) !*Editor {
         const self = try allocator.create(Editor);
 
@@ -158,6 +173,12 @@ pub const Editor = struct {
             .initial_game_camera = scene_camera.*,
             .saved_game_camera = scene_camera.*,
             .scene_panel_bounds = .{ .x = 0, .y = 0, .w = 0, .h = 0 },
+            .selected_object = null,
+            .picking_framebuffer = undefined,
+            .picking_shader = undefined,
+            .picking_uniforms = undefined,
+            .outline_shader = undefined,
+            .outline_uniforms = undefined,
         };
 
         // Create cursors
@@ -206,6 +227,29 @@ pub const Editor = struct {
             fb_width,
             fb_height,
         );
+
+        // Create picking framebuffer (same size as game FBO)
+        self.picking_framebuffer = try Framebuffer.init(fb_width, fb_height);
+
+        // Create picking shader and uniform map
+        self.picking_shader = Shader.init(allocator, utility_vertex_src, picking_fragment_src) catch |err| {
+            std.log.err("Failed to create picking shader: {}", .{err});
+            return error.OutOfMemory;
+        };
+        self.picking_uniforms = self.picking_shader.getUniformLocations(allocator) catch |err| {
+            std.log.err("Failed to get picking uniform locations: {}", .{err});
+            return err;
+        };
+
+        // Create outline shader and uniform map
+        self.outline_shader = Shader.init(allocator, utility_vertex_src, outline_fragment_src) catch |err| {
+            std.log.err("Failed to create outline shader: {}", .{err});
+            return error.OutOfMemory;
+        };
+        self.outline_uniforms = self.outline_shader.getUniformLocations(allocator) catch |err| {
+            std.log.err("Failed to get outline uniform locations: {}", .{err});
+            return err;
+        };
 
         // Initialize docking context with bounds below menu bar
         const dock_bounds = Rect{
@@ -328,6 +372,7 @@ pub const Editor = struct {
             self.pending_fbo_height != self.game_framebuffer.height))
         {
             self.game_framebuffer.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
+            self.picking_framebuffer.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
             self.game_texture_handle = self.renderer.wrapTexture(
                 self.game_framebuffer.getColorTexture(),
                 self.pending_fbo_width,
@@ -346,6 +391,9 @@ pub const Editor = struct {
         // Handle editor camera controls (input still enabled for raw queries)
         self.handleEditorCameraControls(delta_time);
 
+        // Handle object selection (reads picking FBO from previous frame)
+        self.handleObjectSelection();
+
         // If editing or paused, copy editor camera to the scene camera
         if (self.play_state != .playing) {
             self.scene_camera.* = self.editor_camera;
@@ -359,7 +407,29 @@ pub const Editor = struct {
         // Render game to framebuffer
         self.game_framebuffer.bind();
         self.scene.onUpdate(delta_time);
+
+        // Render outline for selected object (into game FBO, before unbind)
+        if (self.play_state != .playing) {
+            if (self.selected_object) |sel| {
+                // Editor accent blue: 0x546be7FF -> R=0x54, G=0x6b, B=0xe7
+                const outline_color = runtime.Vec3.new(
+                    @as(f32, 0x54) / 255.0,
+                    @as(f32, 0x6b) / 255.0,
+                    @as(f32, 0xe7) / 255.0,
+                );
+                RenderCommand.DrawOutline(&self.editor_camera, sel, &self.outline_shader, &self.outline_uniforms, outline_color, 1.05);
+            }
+        }
+
         Framebuffer.unbind();
+
+        // Render picking pass to picking FBO
+        if (self.play_state != .playing) {
+            self.picking_framebuffer.bind();
+            RenderCommand.Clear(.{ .x = 0, .y = 0, .z = 0 });
+            RenderCommand.DrawPicking(&self.editor_camera, &self.picking_shader, &self.picking_uniforms);
+            Framebuffer.unbind();
+        }
 
         // Re-enable input
         Input.setEnabled(true);
@@ -428,6 +498,39 @@ pub const Editor = struct {
         }
     }
 
+    fn handleObjectSelection(self: *Editor) void {
+        // Only active when not playing
+        if (self.play_state == .playing) return;
+
+        // Only on left click (not held/drag)
+        if (!Input.IsButtonPressed(.Left)) return;
+
+        // Don't select while dragging a docking splitter or panel tab
+        if (self.docking_ctx.splitter_drag != null or self.docking_ctx.drag_state.dragging) return;
+
+        // Check if mouse is over the scene panel
+        const mouse = Input.GetMousePos();
+        const b = self.scene_panel_bounds;
+        const in_scene = mouse.x >= b.x and mouse.x <= b.x + b.w and
+            mouse.y >= b.y and mouse.y <= b.y + b.h;
+        if (!in_scene) return;
+
+        // Convert mouse position to FBO-local coordinates (OpenGL: Y flipped)
+        const local_x: i32 = @intFromFloat(mouse.x - b.x);
+        const local_y: i32 = @intFromFloat(b.h - (mouse.y - b.y));
+
+        // Read pixel from picking FBO
+        const pixel = self.picking_framebuffer.readPixel(local_x, local_y);
+        const id: u32 = @as(u32, pixel[0]) | (@as(u32, pixel[1]) << 8) | (@as(u32, pixel[2]) << 16);
+
+        if (id == 0) {
+            // Clicked background - deselect
+            self.selected_object = null;
+        } else {
+            self.selected_object = @intCast(id - 1);
+        }
+    }
+
     fn renderMenuBar(self: *Editor) void {
         const ctx = self.gui_ctx;
 
@@ -466,6 +569,27 @@ pub const Editor = struct {
         self.docking_ctx.saveLayout(layout_file) catch |err| {
             std.log.warn("Failed to save layout: {}", .{err});
         };
+
+        // Clean up picking/outline resources
+        self.picking_framebuffer.deinit();
+        self.picking_shader.deinit();
+        self.outline_shader.deinit();
+
+        // Free uniform map keys and maps
+        {
+            var it = self.picking_uniforms.iterator();
+            while (it.next()) |entry| {
+                self.allocator.free(entry.key_ptr.*);
+            }
+            self.picking_uniforms.deinit();
+        }
+        {
+            var it = self.outline_uniforms.iterator();
+            while (it.next()) |entry| {
+                self.allocator.free(entry.key_ptr.*);
+            }
+            self.outline_uniforms.deinit();
+        }
 
         self.docking_ctx.deinit();
         self.game_framebuffer.deinit();
@@ -524,6 +648,7 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
                 self.scene_camera.* = self.initial_game_camera;
                 self.scene_camera.setAspectRatio(self.editor_camera.aspect_ratio);
                 self.play_state = .playing;
+                self.selected_object = null;
             }
         },
         .playing => {

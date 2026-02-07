@@ -6,7 +6,7 @@ const AssetHandle = runtime.AssetHandle;
 const AssetManager = runtime.AssetManager;
 const RenderCommand = runtime.RenderCommand;
 
-const movement_speed = 0.2;
+const movement_speed = 0.6;
 
 pub const GameScene = struct {
     allocator: std.mem.Allocator,
