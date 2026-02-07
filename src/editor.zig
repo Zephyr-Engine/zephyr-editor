@@ -7,6 +7,7 @@ const Framebuffer = runtime.Framebuffer;
 const Window = runtime.Window;
 const Cursor = runtime.Cursor;
 const Input = runtime.Input;
+const Camera = runtime.Camera;
 
 const InputBridge = @import("gui/input_bridge.zig").InputBridge;
 
@@ -21,6 +22,7 @@ const DockingContext = zgui.docking.DockingContext;
 const PanelInfo = zgui.docking.PanelInfo;
 const layout = zgui.layout;
 const drop = zgui.dropdown;
+const btn = zgui.button;
 const utils = zgui.utils;
 
 // Embedded font data
@@ -32,13 +34,10 @@ const edit_options = [_][]const u8{ "Undo", "Redo", "Cut", "Copy", "Paste" };
 
 const menu_height: f32 = 50;
 
-// Layout persistence file
 const layout_file = "editor_layout.txt";
 
-// File-scope var to allow panel render callbacks to access the Editor.
 var editor_instance: ?*Editor = null;
 
-// Cursor handles (created once during init)
 var cursor_arrow: ?*Cursor = null;
 var cursor_ibeam: ?*Cursor = null;
 var cursor_hand: ?*Cursor = null;
@@ -62,7 +61,6 @@ fn getTime() f64 {
     return Window.GetTime();
 }
 
-/// File-scope event callback set on the Application's window.
 fn editorEventCallback(app: *runtime.Application, e: runtime.ZEvent) void {
     _ = app;
     Input.Update(e);
@@ -71,8 +69,12 @@ fn editorEventCallback(app: *runtime.Application, e: runtime.ZEvent) void {
     }
 }
 
-/// Editor application that wraps any Scene with a docking-based editor GUI.
-/// The Editor is NOT a scene — it has its own run() method that replaces application.run().
+const PlayState = enum {
+    editing,
+    playing,
+    paused,
+};
+
 pub const Editor = struct {
     app: *runtime.Application,
     scene: runtime.Scene,
@@ -91,7 +93,8 @@ pub const Editor = struct {
     // Game rendering
     game_framebuffer: Framebuffer,
     game_texture_handle: TextureHandle,
-    fbo_size_changed: bool,
+    pending_fbo_width: i32,
+    pending_fbo_height: i32,
 
     // Dimensions (logical = window size, fb = framebuffer/physical size)
     window_width: f32,
@@ -108,7 +111,13 @@ pub const Editor = struct {
     delta_time: f32,
     last_frame: f32,
 
-    pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene) !*Editor {
+    // Play state
+    play_state: PlayState,
+    editor_camera: Camera,
+    scene_camera: *Camera,
+    scene_panel_bounds: Rect,
+
+    pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene, scene_camera: *Camera) !*Editor {
         const self = try allocator.create(Editor);
 
         const props = app.getProps();
@@ -130,7 +139,8 @@ pub const Editor = struct {
             .docking_ctx = undefined,
             .game_framebuffer = undefined,
             .game_texture_handle = undefined,
-            .fbo_size_changed = false,
+            .pending_fbo_width = 0,
+            .pending_fbo_height = 0,
             .window_width = width,
             .window_height = height,
             .fb_width = props.fb_width,
@@ -140,6 +150,10 @@ pub const Editor = struct {
             .running = true,
             .delta_time = 0.0,
             .last_frame = 0.0,
+            .play_state = .editing,
+            .editor_camera = scene_camera.*,
+            .scene_camera = scene_camera,
+            .scene_panel_bounds = .{ .x = 0, .y = 0, .w = 0, .h = 0 },
         };
 
         // Create cursors
@@ -304,19 +318,47 @@ pub const Editor = struct {
     }
 
     fn update(self: *Editor, delta_time: f32) void {
-        // If FBO was resized last frame, forward a WindowResize event to the scene
-        // so it can update camera aspect ratio
-        if (self.fbo_size_changed) {
-            self.fbo_size_changed = false;
-            const fbo_w: u32 = @intCast(self.game_framebuffer.width);
-            const fbo_h: u32 = @intCast(self.game_framebuffer.height);
+        // Apply deferred FBO resize before rendering the scene
+        if (self.pending_fbo_width > 0 and self.pending_fbo_height > 0 and
+            (self.pending_fbo_width != self.game_framebuffer.width or
+            self.pending_fbo_height != self.game_framebuffer.height))
+        {
+            self.game_framebuffer.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
+            self.game_texture_handle = self.renderer.wrapTexture(
+                self.game_framebuffer.getColorTexture(),
+                self.pending_fbo_width,
+                self.pending_fbo_height,
+            );
+            const fbo_w: u32 = @intCast(self.pending_fbo_width);
+            const fbo_h: u32 = @intCast(self.pending_fbo_height);
             self.scene.onEvent(.{ .WindowResize = .{ .width = fbo_w, .height = fbo_h } });
+            const w: f32 = @floatFromInt(fbo_w);
+            const h: f32 = @floatFromInt(fbo_h);
+            if (h > 0) {
+                self.editor_camera.setAspectRatio(w / h);
+            }
+        }
+
+        // Handle editor camera controls (input still enabled for raw queries)
+        self.handleEditorCameraControls(delta_time);
+
+        // If editing or paused, copy editor camera to the scene camera
+        if (self.play_state != .playing) {
+            self.scene_camera.* = self.editor_camera;
+        }
+
+        // Disable game input when not playing
+        if (self.play_state != .playing) {
+            Input.setEnabled(false);
         }
 
         // Render game to framebuffer
         self.game_framebuffer.bind();
         self.scene.onUpdate(delta_time);
         Framebuffer.unbind();
+
+        // Re-enable input
+        Input.setEnabled(true);
 
         // Set viewport to physical framebuffer size, clear screen
         const fb_w: i32 = @intCast(self.fb_width);
@@ -352,6 +394,36 @@ pub const Editor = struct {
         self.gui_ctx.render(&self.renderer, fb_w, fb_h);
     }
 
+    fn handleEditorCameraControls(self: *Editor, delta_time: f32) void {
+        // Only active when not playing
+        if (self.play_state == .playing) return;
+
+        // Don't move camera while dragging a docking splitter or panel tab
+        if (self.docking_ctx.splitter_drag != null or self.docking_ctx.drag_state.dragging) return;
+
+        // Check if mouse is over the scene panel
+        const mouse = Input.GetMousePos();
+        const b = self.scene_panel_bounds;
+        const in_scene = mouse.x >= b.x and mouse.x <= b.x + b.w and
+            mouse.y >= b.y and mouse.y <= b.y + b.h;
+        if (!in_scene) return;
+
+        const speed = 0.2 * delta_time;
+
+        if (Input.IsButtonHeld(.Left)) {
+            const delta = Input.GetMouseMoveDelta();
+            self.editor_camera.pan(delta.x, delta.y, speed * 10);
+        } else if (Input.IsButtonHeld(.Right)) {
+            const delta = Input.GetMouseMoveDelta();
+            self.editor_camera.fpsLook(delta.x, delta.y, speed * 10);
+        }
+
+        if (Input.IsScrollingY()) {
+            const delta = Input.GetMouseScroll();
+            self.editor_camera.zoom(delta.y, speed);
+        }
+    }
+
     fn renderMenuBar(self: *Editor) void {
         const ctx = self.gui_ctx;
 
@@ -359,8 +431,8 @@ pub const Editor = struct {
         const menu_rect = Rect{ .x = 0, .y = 0, .w = self.window_width, .h = menu_height };
         ctx.draw_list.addRect(menu_rect, ctx.theme.bg_secondary) catch {};
 
-        // Layout for dropdown menu buttons
-        layout.beginLayout(ctx, layout.hLayout(ctx, .{
+        // Layout for dropdown menu buttons (left-aligned)
+        layout.beginLayout(ctx, layout.Layout.init(.HORIZONTAL, 0, 0, .{
             .margin = layout.Spacing.all(10),
             .padding = layout.Spacing.all(12),
             .height = menu_height,
@@ -383,9 +455,6 @@ pub const Editor = struct {
         }
 
         layout.endLayout(ctx);
-
-        // Title centered
-        ctx.addText(self.window_width / 2 - 60, 15, "Zephyr Editor", 16, ctx.theme.text_bright) catch {};
     }
 
     pub fn deinit(self: *Editor) void {
@@ -426,25 +495,76 @@ pub const Editor = struct {
 fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
     const self = editor_instance orelse return;
 
-    // Resize framebuffer if needed
-    const new_width: i32 = @intFromFloat(bounds.w);
-    const new_height: i32 = @intFromFloat(bounds.h);
-    if (new_width != self.game_framebuffer.width or new_height != self.game_framebuffer.height) {
-        if (new_width > 0 and new_height > 0) {
-            self.game_framebuffer.resize(new_width, new_height) catch {};
-            self.game_texture_handle = self.renderer.wrapTexture(
-                self.game_framebuffer.getColorTexture(),
-                new_width,
-                new_height,
-            );
-            self.fbo_size_changed = true;
-        }
+    const toolbar_height: f32 = 30;
+
+    // -- Play/Pause/Stop toolbar --
+    const toolbar_rect = Rect{ .x = bounds.x, .y = bounds.y, .w = bounds.w, .h = toolbar_height };
+    try ctx.draw_list.addRect(toolbar_rect, ctx.theme.bg_elevated);
+
+    const btn_opts = btn.Options{
+        .font_size = 13,
+        .padding = layout.Spacing.symmetric(3, 8),
+        .border_radius = 4.0,
+    };
+
+    layout.beginLayout(ctx, layout.Layout.init(.HORIZONTAL, bounds.x, bounds.y, .{
+        .width = bounds.w,
+        .height = toolbar_height,
+        .align_horizontal = .CENTER,
+        .align_vertical = .CENTER,
+    }));
+
+    switch (self.play_state) {
+        .editing => {
+            if (btn.button(ctx, "Play", btn_opts)) {
+                self.play_state = .playing;
+            }
+        },
+        .playing => {
+            if (btn.button(ctx, "Pause", btn_opts)) {
+                self.play_state = .paused;
+                self.editor_camera = self.scene_camera.*;
+            }
+            if (btn.button(ctx, "Stop", btn_opts)) {
+                self.play_state = .editing;
+            }
+        },
+        .paused => {
+            if (btn.button(ctx, "Resume", btn_opts)) {
+                self.play_state = .playing;
+                self.scene_camera.* = self.editor_camera;
+            }
+            if (btn.button(ctx, "Stop", btn_opts)) {
+                self.play_state = .editing;
+            }
+        },
+    }
+
+    layout.endLayout(ctx);
+
+    // -- Scene view (below toolbar) --
+    const scene_bounds = Rect{
+        .x = bounds.x,
+        .y = bounds.y + toolbar_height,
+        .w = bounds.w,
+        .h = bounds.h - toolbar_height,
+    };
+
+    // Store bounds for editor camera hit-testing
+    self.scene_panel_bounds = scene_bounds;
+
+    // Request FBO resize for next frame (deferred so current content isn't destroyed)
+    const new_width: i32 = @intFromFloat(scene_bounds.w);
+    const new_height: i32 = @intFromFloat(scene_bounds.h);
+    if (new_width > 0 and new_height > 0) {
+        self.pending_fbo_width = new_width;
+        self.pending_fbo_height = new_height;
     }
 
     // Display game framebuffer as texture (flipped vertically for OpenGL)
     try ctx.draw_list.setTexture(self.game_texture_handle);
     try ctx.draw_list.addRectUV(
-        bounds,
+        scene_bounds,
         .{ 0, 1 },
         .{ 1, 0 },
         0xFFFFFFFF,

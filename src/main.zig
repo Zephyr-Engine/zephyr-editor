@@ -26,7 +26,7 @@ pub fn main() !void {
         application.run();
     } else {
         const Editor = @import("editor.zig").Editor;
-        var editor = try Editor.init(allocator, application, runtime.Scene.init(game_scene));
+        var editor = try Editor.init(allocator, application, runtime.Scene.init(game_scene), &game_scene.camera);
         defer editor.deinit();
 
         editor.run();

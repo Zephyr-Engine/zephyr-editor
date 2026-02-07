@@ -54,7 +54,7 @@ pub const GameScene = struct {
             .shininess = 32.0,
         });
 
-        const model = try runtime.Model.init(allocator, obj_src, &self.material_instance, .zero);
+        const model = try runtime.Model.init(allocator, obj_src, &self.material_instance, runtime.Transform.default);
         self.model = AssetManager.PushModel(allocator, model) catch |err| {
             std.log.err("Failed to push model: {}", .{err});
             return;
@@ -68,26 +68,13 @@ pub const GameScene = struct {
 
         var model = AssetManager.GetModel(self.model);
         if (Input.IsKeyHeld(.A)) {
-            model.position.x -= speed;
+            model.transform.translate(.{ .x = -speed, .y = 0, .z = 0 });
         } else if (Input.IsKeyHeld(.D)) {
-            model.position.x += speed;
+            model.transform.translate(.{ .x = speed, .y = 0, .z = 0 });
         } else if (Input.IsKeyHeld(.W)) {
-            model.position.z += speed;
+            model.transform.translate(.{ .x = 0, .y = 0, .z = speed });
         } else if (Input.IsKeyHeld(.S)) {
-            model.position.z -= speed;
-        }
-
-        if (Input.IsButtonHeld(.Left)) {
-            const delta = Input.GetMouseMoveDelta();
-            self.camera.pan(delta.x, delta.y, speed * 10);
-        } else if (Input.IsButtonHeld(.Right)) {
-            const delta = Input.GetMouseMoveDelta();
-            self.camera.fpsLook(delta.x, delta.y, speed * 10);
-        }
-
-        if (Input.IsScrollingY()) {
-            const delta = Input.GetMouseScroll();
-            self.camera.zoom(delta.y, speed);
+            model.transform.translate(.{ .x = 0, .y = 0, .z = -speed });
         }
 
         const light = runtime.Light{
