@@ -72,9 +72,9 @@ pub const GameScene = struct {
         } else if (Input.IsKeyHeld(.D)) {
             model.transform.translate(.{ .x = speed, .y = 0, .z = 0 });
         } else if (Input.IsKeyHeld(.W)) {
-            model.transform.translate(.{ .x = 0, .y = 0, .z = speed });
-        } else if (Input.IsKeyHeld(.S)) {
             model.transform.translate(.{ .x = 0, .y = 0, .z = -speed });
+        } else if (Input.IsKeyHeld(.S)) {
+            model.transform.translate(.{ .x = 0, .y = 0, .z = speed });
         }
 
         const light = runtime.Light{

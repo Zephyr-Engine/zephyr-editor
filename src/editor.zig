@@ -115,6 +115,8 @@ pub const Editor = struct {
     play_state: PlayState,
     editor_camera: Camera,
     scene_camera: *Camera,
+    initial_game_camera: Camera,
+    saved_game_camera: Camera,
     scene_panel_bounds: Rect,
 
     pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene, scene_camera: *Camera) !*Editor {
@@ -153,6 +155,8 @@ pub const Editor = struct {
             .play_state = .editing,
             .editor_camera = scene_camera.*,
             .scene_camera = scene_camera,
+            .initial_game_camera = scene_camera.*,
+            .saved_game_camera = scene_camera.*,
             .scene_panel_bounds = .{ .x = 0, .y = 0, .w = 0, .h = 0 },
         };
 
@@ -517,13 +521,15 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
     switch (self.play_state) {
         .editing => {
             if (btn.button(ctx, "Play", btn_opts)) {
+                self.scene_camera.* = self.initial_game_camera;
+                self.scene_camera.setAspectRatio(self.editor_camera.aspect_ratio);
                 self.play_state = .playing;
             }
         },
         .playing => {
             if (btn.button(ctx, "Pause", btn_opts)) {
+                self.saved_game_camera = self.scene_camera.*;
                 self.play_state = .paused;
-                self.editor_camera = self.scene_camera.*;
             }
             if (btn.button(ctx, "Stop", btn_opts)) {
                 self.play_state = .editing;
@@ -531,8 +537,8 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
         },
         .paused => {
             if (btn.button(ctx, "Resume", btn_opts)) {
+                self.scene_camera.* = self.saved_game_camera;
                 self.play_state = .playing;
-                self.scene_camera.* = self.editor_camera;
             }
             if (btn.button(ctx, "Stop", btn_opts)) {
                 self.play_state = .editing;

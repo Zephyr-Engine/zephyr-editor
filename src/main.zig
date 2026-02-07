@@ -11,8 +11,8 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const application = try runtime.Application.init(allocator, .{
-        .width = 1920,
-        .height = 1080,
+        .width = null,
+        .height = null,
         .title = "Zephyr Editor",
         .samples = 4,
     });
