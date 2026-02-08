@@ -11,6 +11,12 @@ const Camera = runtime.Camera;
 const Shader = runtime.Shader;
 const AssetManager = runtime.AssetManager;
 
+const TransformSnapshot = struct {
+    position: runtime.Vec3,
+    rotation: runtime.Quat,
+    scale: runtime.Vec3,
+};
+
 const InputBridge = @import("gui/input_bridge.zig").InputBridge;
 
 const GuiContext = zgui.GuiContext;
@@ -126,6 +132,9 @@ pub const Editor = struct {
     saved_game_camera: Camera,
     scene_panel_bounds: Rect,
 
+    // Scene state snapshot (saved on Play, restored on Stop)
+    saved_transforms: std.ArrayList(TransformSnapshot),
+
     // Object selection & outline
     selected_object: ?usize,
     picking_framebuffer: Framebuffer,
@@ -173,6 +182,7 @@ pub const Editor = struct {
             .initial_game_camera = scene_camera.*,
             .saved_game_camera = scene_camera.*,
             .scene_panel_bounds = .{ .x = 0, .y = 0, .w = 0, .h = 0 },
+            .saved_transforms = .empty,
             .selected_object = null,
             .picking_framebuffer = undefined,
             .picking_shader = undefined,
@@ -423,14 +433,6 @@ pub const Editor = struct {
 
         Framebuffer.unbind();
 
-        // Render picking pass to picking FBO
-        if (self.play_state != .playing) {
-            self.picking_framebuffer.bind();
-            RenderCommand.Clear(.{ .x = 0, .y = 0, .z = 0 });
-            RenderCommand.DrawPicking(&self.editor_camera, &self.picking_shader, &self.picking_uniforms);
-            Framebuffer.unbind();
-        }
-
         // Re-enable input
         Input.setEnabled(true);
 
@@ -498,6 +500,30 @@ pub const Editor = struct {
         }
     }
 
+    fn saveSceneState(self: *Editor) void {
+        const models = AssetManager.GetModels();
+        self.saved_transforms.clearRetainingCapacity();
+        self.saved_transforms.ensureTotalCapacity(self.allocator, models.len) catch return;
+        for (models) |model| {
+            self.saved_transforms.appendAssumeCapacity(.{
+                .position = model.transform.position,
+                .rotation = model.transform.rotation,
+                .scale = model.transform.scale,
+            });
+        }
+    }
+
+    fn restoreSceneState(self: *Editor) void {
+        const models = AssetManager.GetModels();
+        for (models, 0..) |*model, i| {
+            if (i >= self.saved_transforms.items.len) break;
+            const saved = self.saved_transforms.items[i];
+            model.transform.position = saved.position;
+            model.transform.rotation = saved.rotation;
+            model.transform.scale = saved.scale;
+        }
+    }
+
     fn handleObjectSelection(self: *Editor) void {
         // Only active when not playing
         if (self.play_state == .playing) return;
@@ -515,12 +541,18 @@ pub const Editor = struct {
             mouse.y >= b.y and mouse.y <= b.y + b.h;
         if (!in_scene) return;
 
+        // Render picking pass on-demand
+        self.picking_framebuffer.bind();
+        RenderCommand.Clear(.{ .x = 0, .y = 0, .z = 0 });
+        RenderCommand.DrawPicking(&self.editor_camera, &self.picking_shader, &self.picking_uniforms);
+
         // Convert mouse position to FBO-local coordinates (OpenGL: Y flipped)
         const local_x: i32 = @intFromFloat(mouse.x - b.x);
         const local_y: i32 = @intFromFloat(b.h - (mouse.y - b.y));
 
-        // Read pixel from picking FBO
+        // Read pixel from picking FBO (still bound)
         const pixel = self.picking_framebuffer.readPixel(local_x, local_y);
+        Framebuffer.unbind();
         const id: u32 = @as(u32, pixel[0]) | (@as(u32, pixel[1]) << 8) | (@as(u32, pixel[2]) << 16);
 
         if (id == 0) {
@@ -569,6 +601,9 @@ pub const Editor = struct {
         self.docking_ctx.saveLayout(layout_file) catch |err| {
             std.log.warn("Failed to save layout: {}", .{err});
         };
+
+        // Clean up scene state snapshot
+        self.saved_transforms.deinit(self.allocator);
 
         // Clean up picking/outline resources
         self.picking_framebuffer.deinit();
@@ -645,6 +680,7 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
     switch (self.play_state) {
         .editing => {
             if (btn.button(ctx, "Play", btn_opts)) {
+                self.saveSceneState();
                 self.scene_camera.* = self.initial_game_camera;
                 self.scene_camera.setAspectRatio(self.editor_camera.aspect_ratio);
                 self.play_state = .playing;
@@ -657,6 +693,7 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
                 self.play_state = .paused;
             }
             if (btn.button(ctx, "Stop", btn_opts)) {
+                self.restoreSceneState();
                 self.play_state = .editing;
             }
         },
@@ -666,6 +703,7 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
                 self.play_state = .playing;
             }
             if (btn.button(ctx, "Stop", btn_opts)) {
+                self.restoreSceneState();
                 self.play_state = .editing;
             }
         },
