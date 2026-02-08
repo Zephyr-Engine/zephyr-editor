@@ -369,7 +369,7 @@ pub const Editor = struct {
         // Apply deferred FBO resize before rendering the scene
         if (self.pending_fbo_width > 0 and self.pending_fbo_height > 0 and
             (self.pending_fbo_width != self.game_framebuffer.width or
-            self.pending_fbo_height != self.game_framebuffer.height))
+                self.pending_fbo_height != self.game_framebuffer.height))
         {
             self.game_framebuffer.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
             self.picking_framebuffer.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
@@ -722,19 +722,36 @@ fn renderHierarchyPanel(ctx: *GuiContext, bounds: Rect) !void {
 }
 
 fn renderInspectorPanel(ctx: *GuiContext, bounds: Rect) !void {
+    const self = editor_instance orelse return;
+    const sel = self.selected_object orelse return;
+
+    const models = AssetManager.GetModels();
+    if (sel >= models.len) {
+        return;
+    }
+    const transform = models[sel].transform;
+
     var y = bounds.y + 16;
     const x = bounds.x + 16;
 
     try ctx.addText(x, y, "Transform", 16, ctx.theme.text_primary);
     y += 24;
 
-    try ctx.addText(x, y, "Position: 0, 0, 0", 14, ctx.theme.text_secondary);
+    var buf: [128]u8 = undefined;
+
+    const pos = transform.position;
+    const pos_text = std.fmt.bufPrint(&buf, "Position: {d:.2}, {d:.2}, {d:.2}", .{ pos.x, pos.y, pos.z }) catch "Position: ?";
+    try ctx.addText(x, y, pos_text, 14, ctx.theme.text_secondary);
     y += 20;
 
-    try ctx.addText(x, y, "Rotation: 0, 0, 0", 14, ctx.theme.text_secondary);
+    const rot = transform.rotation;
+    const rot_text = std.fmt.bufPrint(&buf, "Rotation: {d:.2}, {d:.2}, {d:.2}, {d:.2}", .{ rot.x, rot.y, rot.z, rot.w }) catch "Rotation: ?";
+    try ctx.addText(x, y, rot_text, 14, ctx.theme.text_secondary);
     y += 20;
 
-    try ctx.addText(x, y, "Scale: 1, 1, 1", 14, ctx.theme.text_secondary);
+    const scl = transform.scale;
+    const scl_text = std.fmt.bufPrint(&buf, "Scale: {d:.2}, {d:.2}, {d:.2}", .{ scl.x, scl.y, scl.z }) catch "Scale: ?";
+    try ctx.addText(x, y, scl_text, 14, ctx.theme.text_secondary);
 }
 
 fn renderConsolePanel(ctx: *GuiContext, bounds: Rect) !void {
