@@ -59,6 +59,25 @@ pub const GameScene = struct {
             std.log.err("Failed to push model: {}", .{err});
             return;
         };
+
+        // white point light (upper right)
+        _ = try AssetManager.PushLight(allocator, .{
+            .kind = .point,
+            .position = .{ .x = 1.2, .y = 1.0, .z = 2.0 },
+            .ambient = .{ .x = 0.1, .y = 0.1, .z = 0.1 },
+            .diffuse = .{ .x = 0.8, .y = 0.8, .z = 0.8 },
+            .specular = .{ .x = 1.0, .y = 1.0, .z = 1.0 },
+        });
+
+        // blue directional light (from above)
+        _ = try AssetManager.PushLight(allocator, .{
+            .kind = .directional,
+            .position = .{ .x = 0, .y = 0, .z = 0 },
+            .direction = .{ .x = 0, .y = -1, .z = -0.5 },
+            .ambient = .{ .x = 0.05, .y = 0.05, .z = 0.1 },
+            .diffuse = .{ .x = 0.2, .y = 0.2, .z = 0.4 },
+            .specular = .{ .x = 0.3, .y = 0.3, .z = 0.5 },
+        });
     }
 
     pub fn onUpdate(self: *GameScene, delta_time: f32) void {
@@ -76,18 +95,6 @@ pub const GameScene = struct {
         } else if (Input.IsKeyHeld(.S)) {
             model.transform.translate(.{ .x = 0, .y = 0, .z = speed });
         }
-
-        const light = runtime.Light{
-            .position = .{ .x = 1.2, .y = 1.0, .z = 2.0 },
-            .ambient = .{ .x = 0.2, .y = 0.2, .z = 0.2 },
-            .diffuse = .{ .x = 0.5, .y = 0.5, .z = 0.5 },
-            .specular = .{ .x = 1.0, .y = 1.0, .z = 1.0 },
-        };
-
-        self.material_instance.setUniform("light.position", light.position);
-        self.material_instance.setUniform("light.ambient", light.ambient);
-        self.material_instance.setUniform("light.diffuse", light.diffuse);
-        self.material_instance.setUniform("light.specular", light.specular);
 
         RenderCommand.Draw(&self.camera);
     }
