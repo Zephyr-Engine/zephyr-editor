@@ -74,12 +74,9 @@ fn getTime() f64 {
     return Window.GetTime();
 }
 
-fn editorEventCallback(app: *runtime.Application, e: runtime.ZEvent) void {
-    _ = app;
+fn editorEventCallback(self: *Editor, e: runtime.ZEvent) void {
     Input.Update(e);
-    if (editor_instance) |editor| {
-        editor.handleEvent(e);
-    }
+    self.handleEvent(e);
 }
 
 const PlayState = enum {
@@ -139,9 +136,7 @@ pub const Editor = struct {
     selected_object: ?usize,
     picking_framebuffer: Framebuffer,
     picking_shader: Shader,
-    picking_uniforms: std.StringHashMap(i32),
     outline_shader: Shader,
-    outline_uniforms: std.StringHashMap(i32),
 
     pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene, scene_camera: *Camera) !*Editor {
         const self = try allocator.create(Editor);
@@ -186,9 +181,7 @@ pub const Editor = struct {
             .selected_object = null,
             .picking_framebuffer = undefined,
             .picking_shader = undefined,
-            .picking_uniforms = undefined,
             .outline_shader = undefined,
-            .outline_uniforms = undefined,
         };
 
         // Create cursors
@@ -246,19 +239,11 @@ pub const Editor = struct {
             std.log.err("Failed to create picking shader: {}", .{err});
             return error.OutOfMemory;
         };
-        self.picking_uniforms = self.picking_shader.getUniformLocations(allocator) catch |err| {
-            std.log.err("Failed to get picking uniform locations: {}", .{err});
-            return err;
-        };
 
         // Create outline shader and uniform map
         self.outline_shader = Shader.init(allocator, utility_vertex_src, outline_fragment_src) catch |err| {
             std.log.err("Failed to create outline shader: {}", .{err});
             return error.OutOfMemory;
-        };
-        self.outline_uniforms = self.outline_shader.getUniformLocations(allocator) catch |err| {
-            std.log.err("Failed to get outline uniform locations: {}", .{err});
-            return err;
         };
 
         // Initialize docking context with bounds below menu bar
@@ -320,7 +305,7 @@ pub const Editor = struct {
         editor_instance = self;
 
         // Replace Application's event callback with our own
-        app.window.setEventCallback(editorEventCallback, app);
+        app.window.setEventCallback(self, editorEventCallback);
 
         return self;
     }
@@ -427,7 +412,7 @@ pub const Editor = struct {
                     @as(f32, 0x6b) / 255.0,
                     @as(f32, 0xe7) / 255.0,
                 );
-                RenderCommand.DrawOutline(&self.editor_camera, sel, &self.outline_shader, &self.outline_uniforms, outline_color, 1.05);
+                RenderCommand.DrawOutline(&self.editor_camera, sel, &self.outline_shader, outline_color, 1.05);
             }
         }
 
@@ -544,7 +529,7 @@ pub const Editor = struct {
         // Render picking pass on-demand
         self.picking_framebuffer.bind();
         RenderCommand.Clear(.{ .x = 0, .y = 0, .z = 0 });
-        RenderCommand.DrawPicking(&self.editor_camera, &self.picking_shader, &self.picking_uniforms);
+        RenderCommand.DrawPicking(&self.editor_camera, &self.picking_shader);
 
         // Convert mouse position to FBO-local coordinates (OpenGL: Y flipped)
         const local_x: i32 = @intFromFloat(mouse.x - b.x);
@@ -609,22 +594,6 @@ pub const Editor = struct {
         self.picking_framebuffer.deinit();
         self.picking_shader.deinit();
         self.outline_shader.deinit();
-
-        // Free uniform map keys and maps
-        {
-            var it = self.picking_uniforms.iterator();
-            while (it.next()) |entry| {
-                self.allocator.free(entry.key_ptr.*);
-            }
-            self.picking_uniforms.deinit();
-        }
-        {
-            var it = self.outline_uniforms.iterator();
-            while (it.next()) |entry| {
-                self.allocator.free(entry.key_ptr.*);
-            }
-            self.outline_uniforms.deinit();
-        }
 
         self.docking_ctx.deinit();
         self.game_framebuffer.deinit();

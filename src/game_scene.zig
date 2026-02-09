@@ -46,7 +46,7 @@ pub const GameScene = struct {
         const obj_src = @embedFile("assets/meshes/monkey.obj");
 
         self.shader = try runtime.Shader.init(allocator, vs_src, fs_src);
-        self.material = try runtime.Material.init(allocator, &self.shader);
+        self.material = runtime.Material.init(allocator, &self.shader);
         self.material_instance = self.material.instaniate(.{
             .ambient = .{ .x = 1.0, .y = 0.5, .z = 0.31 },
             .diffuse = .{ .x = 1.0, .y = 0.5, .z = 0.31 },
@@ -109,7 +109,6 @@ pub const GameScene = struct {
         std.log.info("GameScene cleaning up...", .{});
 
         self.shader.deinit();
-        self.material.deinit();
 
         allocator.destroy(self);
     }
