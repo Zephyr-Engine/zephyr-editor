@@ -8,16 +8,11 @@ const Window = runtime.Window;
 const Cursor = runtime.Cursor;
 const Input = runtime.Input;
 const Camera = runtime.Camera;
-const Shader = runtime.Shader;
 const AssetManager = runtime.AssetManager;
 
-const TransformSnapshot = struct {
-    position: runtime.Vec3,
-    rotation: runtime.Quat,
-    scale: runtime.Vec3,
-};
-
 const InputBridge = @import("gui/input_bridge.zig").InputBridge;
+const PickingSystem = @import("editor/picking.zig").PickingSystem;
+const OutlineRenderer = @import("editor/outline.zig").OutlineRenderer;
 
 const GuiContext = zgui.GuiContext;
 const Renderer = zgui.Renderer;
@@ -33,15 +28,8 @@ const drop = zgui.dropdown;
 const btn = zgui.button;
 const utils = zgui.utils;
 
-// Embedded font data
 const font_data = @embedFile("assets/fonts/RobotoMono-Regular.ttf");
 
-// Embedded shader sources for picking and outline
-const utility_vertex_src = @embedFile("assets/shaders/utility_vertex.glsl");
-const picking_fragment_src = @embedFile("assets/shaders/picking_fragment.glsl");
-const outline_fragment_src = @embedFile("assets/shaders/outline_fragment.glsl");
-
-// Menu dropdown options
 const file_options = [_][]const u8{ "New", "Open", "Save", "Save As", "Exit" };
 const edit_options = [_][]const u8{ "Undo", "Redo", "Cut", "Copy", "Paste" };
 
@@ -130,13 +118,12 @@ pub const Editor = struct {
     scene_panel_bounds: Rect,
 
     // Scene state snapshot (saved on Play, restored on Stop)
-    saved_transforms: std.ArrayList(TransformSnapshot),
+    scene_snapshot: runtime.SceneSnapshot,
 
     // Object selection & outline
     selected_object: ?usize,
-    picking_framebuffer: Framebuffer,
-    picking_shader: Shader,
-    outline_shader: Shader,
+    picking_system: PickingSystem,
+    outline_renderer: OutlineRenderer,
 
     pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene, scene_camera: *Camera) !*Editor {
         const self = try allocator.create(Editor);
@@ -177,11 +164,10 @@ pub const Editor = struct {
             .initial_game_camera = scene_camera.*,
             .saved_game_camera = scene_camera.*,
             .scene_panel_bounds = .{ .x = 0, .y = 0, .w = 0, .h = 0 },
-            .saved_transforms = .empty,
+            .scene_snapshot = runtime.SceneSnapshot.init(),
             .selected_object = null,
-            .picking_framebuffer = undefined,
-            .picking_shader = undefined,
-            .outline_shader = undefined,
+            .picking_system = undefined,
+            .outline_renderer = undefined,
         };
 
         // Create cursors
@@ -231,20 +217,9 @@ pub const Editor = struct {
             fb_height,
         );
 
-        // Create picking framebuffer (same size as game FBO)
-        self.picking_framebuffer = try Framebuffer.init(fb_width, fb_height);
-
-        // Create picking shader and uniform map
-        self.picking_shader = Shader.init(allocator, utility_vertex_src, picking_fragment_src) catch |err| {
-            std.log.err("Failed to create picking shader: {}", .{err});
-            return error.OutOfMemory;
-        };
-
-        // Create outline shader and uniform map
-        self.outline_shader = Shader.init(allocator, utility_vertex_src, outline_fragment_src) catch |err| {
-            std.log.err("Failed to create outline shader: {}", .{err});
-            return error.OutOfMemory;
-        };
+        // Create picking system and outline renderer
+        self.picking_system = try PickingSystem.init(allocator, fb_width, fb_height);
+        self.outline_renderer = try OutlineRenderer.init(allocator);
 
         // Initialize docking context with bounds below menu bar
         const dock_bounds = Rect{
@@ -367,7 +342,7 @@ pub const Editor = struct {
                 self.pending_fbo_height != self.game_framebuffer.height))
         {
             self.game_framebuffer.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
-            self.picking_framebuffer.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
+            self.picking_system.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
             self.game_texture_handle = self.renderer.wrapTexture(
                 self.game_framebuffer.getColorTexture(),
                 self.pending_fbo_width,
@@ -406,13 +381,12 @@ pub const Editor = struct {
         // Render outline for selected object (into game FBO, before unbind)
         if (self.play_state != .playing) {
             if (self.selected_object) |sel| {
-                // Editor accent blue: 0x546be7FF -> R=0x54, G=0x6b, B=0xe7
                 const outline_color = runtime.Vec3.new(
                     @as(f32, 0x54) / 255.0,
                     @as(f32, 0x6b) / 255.0,
                     @as(f32, 0xe7) / 255.0,
                 );
-                RenderCommand.DrawOutline(&self.editor_camera, sel, &self.outline_shader, outline_color, 1.05);
+                self.outline_renderer.draw(&self.editor_camera, sel, outline_color, 1.05);
             }
         }
 
@@ -486,27 +460,11 @@ pub const Editor = struct {
     }
 
     fn saveSceneState(self: *Editor) void {
-        const models = AssetManager.GetModels();
-        self.saved_transforms.clearRetainingCapacity();
-        self.saved_transforms.ensureTotalCapacity(self.allocator, models.len) catch return;
-        for (models) |model| {
-            self.saved_transforms.appendAssumeCapacity(.{
-                .position = model.transform.position,
-                .rotation = model.transform.rotation,
-                .scale = model.transform.scale,
-            });
-        }
+        self.scene_snapshot.save(self.allocator);
     }
 
     fn restoreSceneState(self: *Editor) void {
-        const models = AssetManager.GetModels();
-        for (models, 0..) |*model, i| {
-            if (i >= self.saved_transforms.items.len) break;
-            const saved = self.saved_transforms.items[i];
-            model.transform.position = saved.position;
-            model.transform.rotation = saved.rotation;
-            model.transform.scale = saved.scale;
-        }
+        self.scene_snapshot.restore();
     }
 
     fn handleObjectSelection(self: *Editor) void {
@@ -526,26 +484,11 @@ pub const Editor = struct {
             mouse.y >= b.y and mouse.y <= b.y + b.h;
         if (!in_scene) return;
 
-        // Render picking pass on-demand
-        self.picking_framebuffer.bind();
-        RenderCommand.Clear(.{ .x = 0, .y = 0, .z = 0 });
-        RenderCommand.DrawPicking(&self.editor_camera, &self.picking_shader);
-
         // Convert mouse position to FBO-local coordinates (OpenGL: Y flipped)
         const local_x: i32 = @intFromFloat(mouse.x - b.x);
         const local_y: i32 = @intFromFloat(b.h - (mouse.y - b.y));
 
-        // Read pixel from picking FBO (still bound)
-        const pixel = self.picking_framebuffer.readPixel(local_x, local_y);
-        Framebuffer.unbind();
-        const id: u32 = @as(u32, pixel[0]) | (@as(u32, pixel[1]) << 8) | (@as(u32, pixel[2]) << 16);
-
-        if (id == 0) {
-            // Clicked background - deselect
-            self.selected_object = null;
-        } else {
-            self.selected_object = @intCast(id - 1);
-        }
+        self.selected_object = self.picking_system.pick(&self.editor_camera, local_x, local_y);
     }
 
     fn renderMenuBar(self: *Editor) void {
@@ -582,18 +525,13 @@ pub const Editor = struct {
     }
 
     pub fn deinit(self: *Editor) void {
-        // Save layout before cleanup
         self.docking_ctx.saveLayout(layout_file) catch |err| {
             std.log.warn("Failed to save layout: {}", .{err});
         };
 
-        // Clean up scene state snapshot
-        self.saved_transforms.deinit(self.allocator);
-
-        // Clean up picking/outline resources
-        self.picking_framebuffer.deinit();
-        self.picking_shader.deinit();
-        self.outline_shader.deinit();
+        self.scene_snapshot.deinit(self.allocator);
+        self.picking_system.deinit();
+        self.outline_renderer.deinit();
 
         self.docking_ctx.deinit();
         self.game_framebuffer.deinit();
@@ -602,7 +540,6 @@ pub const Editor = struct {
 
         self.allocator.destroy(self.gui_ctx);
 
-        // Destroy cursors
         Window.destroyCursor(cursor_arrow);
         Window.destroyCursor(cursor_ibeam);
         Window.destroyCursor(cursor_hand);
@@ -622,14 +559,11 @@ pub const Editor = struct {
     }
 };
 
-// Panel render callbacks (file-scope functions matching PanelRenderFn signature)
-
 fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
     const self = editor_instance orelse return;
 
     const toolbar_height: f32 = 30;
 
-    // -- Play/Pause/Stop toolbar --
     const toolbar_rect = Rect{ .x = bounds.x, .y = bounds.y, .w = bounds.w, .h = toolbar_height };
     try ctx.draw_list.addRect(toolbar_rect, ctx.theme.bg_elevated);
 
@@ -680,7 +614,6 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
 
     layout.endLayout(ctx);
 
-    // -- Scene view (below toolbar) --
     const scene_bounds = Rect{
         .x = bounds.x,
         .y = bounds.y + toolbar_height,
@@ -688,10 +621,8 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
         .h = bounds.h - toolbar_height,
     };
 
-    // Store bounds for editor camera hit-testing
     self.scene_panel_bounds = scene_bounds;
 
-    // Request FBO resize for next frame (deferred so current content isn't destroyed)
     const new_width: i32 = @intFromFloat(scene_bounds.w);
     const new_height: i32 = @intFromFloat(scene_bounds.h);
     if (new_width > 0 and new_height > 0) {
@@ -699,7 +630,6 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
         self.pending_fbo_height = new_height;
     }
 
-    // Display game framebuffer as texture (flipped vertically for OpenGL)
     try ctx.draw_list.setTexture(self.game_texture_handle);
     try ctx.draw_list.addRectUV(
         scene_bounds,

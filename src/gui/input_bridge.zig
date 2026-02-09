@@ -8,7 +8,6 @@ const MouseButton = runtime.MouseButton;
 const GuiContext = zgui.GuiContext;
 const zgui_window = zgui.window;
 
-/// Translates zephyr-runtime events to zGUI input calls
 pub const InputBridge = struct {
     gui_ctx: *GuiContext,
 
@@ -18,7 +17,6 @@ pub const InputBridge = struct {
         };
     }
 
-    /// Process a zephyr-runtime event and inject it into zGUI
     pub fn processEvent(self: *InputBridge, e: ZEvent) void {
         switch (e) {
             .MouseMove => |m| {
@@ -88,7 +86,6 @@ pub const InputBridge = struct {
     }
 
     fn mapKey(key: Key) c_int {
-        // GLFW key codes match between zephyr-runtime and zGUI
         return @intFromEnum(key);
     }
 };
