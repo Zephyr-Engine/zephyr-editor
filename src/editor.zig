@@ -377,6 +377,7 @@ pub const Editor = struct {
         // Render game to framebuffer
         self.game_framebuffer.bind();
         self.scene.onUpdate(delta_time);
+        RenderCommand.Draw(self.scene_camera);
 
         // Render outline for selected object (into game FBO, before unbind)
         if (self.play_state != .playing) {
@@ -386,7 +387,7 @@ pub const Editor = struct {
                     @as(f32, 0x6b) / 255.0,
                     @as(f32, 0xe7) / 255.0,
                 );
-                self.outline_renderer.draw(&self.editor_camera, sel, outline_color, 1.05);
+                self.outline_renderer.draw(&self.editor_camera, sel, outline_color, 1.03);
             }
         }
 
