@@ -24,5 +24,6 @@ void main() {
 
     vec3 color = calcLighting(normal, viewDir, FragPos, material.ambient, material.diffuse, material.specular, material.shininess);
 
-    FragColor = vec4(color, 1.0);
+    // TexCoord used to prevent shader from optimizing out the attribute
+    FragColor = vec4(color, 1.0) + vec4(TexCoord, 0.0, 0.0) * 0.0001;
 }
