@@ -141,7 +141,6 @@ pub const Editor = struct {
         const width: f32 = @floatFromInt(props.width);
         const height: f32 = @floatFromInt(props.height);
 
-        // Create GUI renderer using zgui's embedded OpenGL renderer
         const renderer = try opengl.createEmbeddedRenderer(allocator);
 
         self.* = Editor{
@@ -347,7 +346,6 @@ pub const Editor = struct {
     }
 
     fn update(self: *Editor, delta_time: f32) void {
-        // Apply deferred FBO resize before rendering the scene
         if (self.pending_fbo_width > 0 and self.pending_fbo_height > 0 and
             (self.pending_fbo_width != self.game_framebuffer.width or
                 self.pending_fbo_height != self.game_framebuffer.height))
@@ -369,23 +367,17 @@ pub const Editor = struct {
             }
         }
 
-        // Handle editor camera controls (input still enabled for raw queries)
         self.handleEditorCameraControls(delta_time);
-
-        // Handle object selection (reads picking FBO from previous frame)
         self.handleObjectSelection();
 
-        // If editing or paused, copy editor camera to the scene camera
         if (self.play_state != .playing) {
             self.scene_camera.* = self.editor_camera;
         }
 
-        // Disable game input when not playing
         if (self.play_state != .playing) {
             Input.setEnabled(false);
         }
 
-        // Shadow pass — render depth from the directional light's POV
         const lights = AssetManager.GetLights();
         for (lights) |light| {
             if (light.kind == .directional) {
@@ -395,10 +387,8 @@ pub const Editor = struct {
             }
         }
 
-        // Attach shadow map to draw list so shaders receive shadow uniforms
         self.draw_list.setShadowMap(&self.shadow_map);
 
-        // Scene pass via RenderPass — handles framebuffer bind/unbind, clear, GL state
         var scene_pass = RenderPass.init("scene");
         _ = scene_pass
             .setTarget(&self.game_framebuffer)
@@ -409,16 +399,13 @@ pub const Editor = struct {
             .setUserData(self);
         scene_pass.execute();
 
-        // Re-enable input
         Input.setEnabled(true);
 
-        // Set viewport to physical framebuffer size, clear screen
         const fb_w: i32 = @intCast(self.fb_width);
         const fb_h: i32 = @intCast(self.fb_height);
         RenderCommand.SetViewport(0, 0, fb_w, fb_h);
         RenderCommand.Clear(.{ .x = 0.15, .y = 0.15, .z = 0.18 });
 
-        // newFrame() -> replay buffered events -> finalizeInjectedInput()
         self.gui_ctx.newFrame();
 
         for (self.event_buffer[0..self.event_count]) |e| {
@@ -428,7 +415,6 @@ pub const Editor = struct {
 
         self.gui_ctx.finalizeInjectedInput();
 
-        // Update docking bounds to fill area below menu bar
         self.docking_ctx.dock_space.bounds = Rect{
             .x = 0,
             .y = menu_height,
@@ -436,24 +422,16 @@ pub const Editor = struct {
             .h = self.window_height - menu_height,
         };
 
-        // Render menu bar
         self.renderMenuBar();
 
-        // Render docking system (tabs, splitters, drop zones, panel content)
         self.docking_ctx.render(self.gui_ctx) catch {};
-
-        // Render frame (includes dropdown overlays)
         self.gui_ctx.render(&self.renderer, fb_w, fb_h);
     }
 
     fn handleEditorCameraControls(self: *Editor, delta_time: f32) void {
-        // Only active when not playing
         if (self.play_state == .playing) return;
-
-        // Don't move camera while dragging a docking splitter or panel tab
         if (self.docking_ctx.splitter_drag != null or self.docking_ctx.drag_state.dragging) return;
 
-        // Check if mouse is over the scene panel
         const mouse = Input.GetMousePos();
         const b = self.scene_panel_bounds;
         const in_scene = mouse.x >= b.x and mouse.x <= b.x + b.w and
@@ -485,23 +463,18 @@ pub const Editor = struct {
     }
 
     fn handleObjectSelection(self: *Editor) void {
-        // Only active when not playing
         if (self.play_state == .playing) return;
 
-        // Only on left click (not held/drag)
         if (!Input.IsButtonPressed(.Left)) return;
 
-        // Don't select while dragging a docking splitter or panel tab
         if (self.docking_ctx.splitter_drag != null or self.docking_ctx.drag_state.dragging) return;
 
-        // Check if mouse is over the scene panel
         const mouse = Input.GetMousePos();
         const b = self.scene_panel_bounds;
         const in_scene = mouse.x >= b.x and mouse.x <= b.x + b.w and
             mouse.y >= b.y and mouse.y <= b.y + b.h;
         if (!in_scene) return;
 
-        // Convert mouse position to FBO-local coordinates (OpenGL: Y flipped)
         const local_x: i32 = @intFromFloat(mouse.x - b.x);
         const local_y: i32 = @intFromFloat(b.h - (mouse.y - b.y));
 
@@ -511,11 +484,9 @@ pub const Editor = struct {
     fn renderMenuBar(self: *Editor) void {
         const ctx = self.gui_ctx;
 
-        // Menu bar background
         const menu_rect = Rect{ .x = 0, .y = 0, .w = self.window_width, .h = menu_height };
         ctx.draw_list.addRect(menu_rect, ctx.theme.bg_secondary) catch {};
 
-        // Layout for dropdown menu buttons (left-aligned)
         layout.beginLayout(ctx, layout.Layout.init(.HORIZONTAL, 0, 0, .{
             .margin = layout.Spacing.all(10),
             .padding = layout.Spacing.all(12),

@@ -118,7 +118,7 @@ pub const GameScene = struct {
 
     pub fn onEvent(_: *GameScene, e: runtime.ZEvent) void {
         switch (e) {
-            .WindowResize => |resize| {
+            .FramebufferResize => |resize| {
                 const w: f32 = @floatFromInt(resize.width);
                 const h: f32 = @floatFromInt(resize.height);
                 if (h > 0) {
