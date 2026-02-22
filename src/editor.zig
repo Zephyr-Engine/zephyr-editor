@@ -3,7 +3,10 @@ const runtime = @import("zephyr_runtime");
 const zgui = @import("zgui");
 
 const RenderCommand = runtime.RenderCommand;
+const DrawList = runtime.DrawList;
 const Framebuffer = runtime.Framebuffer;
+const RenderPass = runtime.RenderPass;
+const ShadowMap = runtime.ShadowMap;
 const Window = runtime.Window;
 const Cursor = runtime.Cursor;
 const Input = runtime.Input;
@@ -125,6 +128,12 @@ pub const Editor = struct {
     picking_system: PickingSystem,
     outline_renderer: OutlineRenderer,
 
+    // Draw list for batched rendering
+    draw_list: DrawList,
+
+    // Shadow mapping
+    shadow_map: ShadowMap,
+
     pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene, scene_camera: *Camera) !*Editor {
         const self = try allocator.create(Editor);
 
@@ -168,6 +177,8 @@ pub const Editor = struct {
             .selected_object = null,
             .picking_system = undefined,
             .outline_renderer = undefined,
+            .draw_list = DrawList.init(allocator),
+            .shadow_map = try ShadowMap.init(allocator, 2048, 20.0),
         };
 
         // Create cursors
@@ -374,24 +385,29 @@ pub const Editor = struct {
             Input.setEnabled(false);
         }
 
-        // Render game to framebuffer
-        self.game_framebuffer.bind();
-        self.scene.onUpdate(delta_time);
-        RenderCommand.Draw(self.scene_camera);
-
-        // Render outline for selected object (into game FBO, before unbind)
-        if (self.play_state != .playing) {
-            if (self.selected_object) |sel| {
-                const outline_color = runtime.Vec3.new(
-                    @as(f32, 0x54) / 255.0,
-                    @as(f32, 0x6b) / 255.0,
-                    @as(f32, 0xe7) / 255.0,
-                );
-                self.outline_renderer.draw(&self.editor_camera, sel, outline_color, 1.03);
+        // Shadow pass — render depth from the directional light's POV
+        const lights = AssetManager.GetLights();
+        for (lights) |light| {
+            if (light.kind == .directional) {
+                self.shadow_map.computeLightSpaceMatrix(light);
+                self.shadow_map.renderShadowPass();
+                break;
             }
         }
 
-        Framebuffer.unbind();
+        // Attach shadow map to draw list so shaders receive shadow uniforms
+        self.draw_list.setShadowMap(&self.shadow_map);
+
+        // Scene pass via RenderPass — handles framebuffer bind/unbind, clear, GL state
+        var scene_pass = RenderPass.init("scene");
+        _ = scene_pass
+            .setTarget(&self.game_framebuffer)
+            .setClearFlags(.{ .color = true, .depth = true, .stencil = true })
+            .setClearColor(0.1, 0.1, 0.15, 1.0)
+            .setDepthTest(true)
+            .setDrawFn(editorSceneDrawFn)
+            .setUserData(self);
+        scene_pass.execute();
 
         // Re-enable input
         Input.setEnabled(true);
@@ -534,6 +550,8 @@ pub const Editor = struct {
         self.picking_system.deinit();
         self.outline_renderer.deinit();
 
+        self.draw_list.deinit();
+        self.shadow_map.deinit();
         self.docking_ctx.deinit();
         self.game_framebuffer.deinit();
         self.renderer.deinit();
@@ -559,6 +577,27 @@ pub const Editor = struct {
         self.allocator.destroy(self);
     }
 };
+
+fn editorSceneDrawFn(pass: *RenderPass) void {
+    const self = pass.getUserData(Editor) orelse return;
+
+    self.scene.onUpdate(self.delta_time);
+    self.draw_list.collectFromScene(self.scene_camera) catch {};
+    self.draw_list.sortOpaque();
+    self.draw_list.execute(self.scene_camera);
+
+    // Render outline for selected object
+    if (self.play_state != .playing) {
+        if (self.selected_object) |sel| {
+            const outline_color = runtime.Vec3.new(
+                @as(f32, 0x54) / 255.0,
+                @as(f32, 0x6b) / 255.0,
+                @as(f32, 0xe7) / 255.0,
+            );
+            self.outline_renderer.draw(&self.editor_camera, sel, outline_color, 1.03);
+        }
+    }
+}
 
 fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
     const self = editor_instance orelse return;

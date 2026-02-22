@@ -4,9 +4,20 @@ const runtime = @import("zephyr_runtime");
 const Input = runtime.Input;
 const AssetHandle = runtime.AssetHandle;
 const AssetManager = runtime.AssetManager;
-const RenderCommand = runtime.RenderCommand;
 
 const movement_speed = 0.6;
+
+const plane_obj =
+    \\# Ground plane
+    \\v -1.0  0.0 -1.0
+    \\v  1.0  0.0 -1.0
+    \\v  1.0  0.0  1.0
+    \\v -1.0  0.0  1.0
+    \\vn 0.0 1.0 0.0
+    \\f 1//1 2//1 3//1
+    \\f 1//1 3//1 4//1
+    \\
+;
 
 pub const GameScene = struct {
     allocator: std.mem.Allocator,
@@ -72,12 +83,26 @@ pub const GameScene = struct {
             .diffuse = .{ .x = 0.6, .y = 0.6, .z = 0.6 },
             .specular = .{ .x = 0.5, .y = 0.5, .z = 0.5 },
         });
+
+        // Ground plane — light beige so shadows are easy to see
+        const ground_mat = try AssetManager.LoadMaterialInstance(allocator, mat, .{
+            .ambient = .{ .x = 0.8, .y = 0.75, .z = 0.65 },
+            .diffuse = .{ .x = 0.8, .y = 0.75, .z = 0.65 },
+            .specular = .{ .x = 0.2, .y = 0.2, .z = 0.2 },
+            .shininess = 8.0,
+        });
+        _ = try AssetManager.LoadModel(allocator, .{
+            .obj = plane_obj,
+            .instance = ground_mat,
+            .transform = .{
+                .position = .{ .x = 0, .y = -1.5, .z = 0 },
+                .scale = .{ .x = 15, .y = 1, .z = 15 },
+            },
+        });
     }
 
     pub fn onUpdate(self: *GameScene, delta_time: f32) void {
         const speed = movement_speed * delta_time;
-
-        RenderCommand.Clear(.{ .x = 0.1, .y = 0.1, .z = 0.15 });
 
         var model = AssetManager.GetModel(self.model);
         if (Input.IsKeyHeld(.A)) {
