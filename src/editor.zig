@@ -12,6 +12,7 @@ const Cursor = runtime.Cursor;
 const Input = runtime.Input;
 const Camera = runtime.Camera;
 const AssetManager = runtime.AssetManager;
+const CameraHandle = runtime.CameraHandle;
 
 const InputBridge = @import("gui/input_bridge.zig").InputBridge;
 const PickingSystem = @import("editor/picking.zig").PickingSystem;
@@ -85,8 +86,6 @@ pub const Editor = struct {
     renderer: Renderer,
     gui_ctx: *GuiContext,
     input_bridge: InputBridge,
-    event_buffer: [64]runtime.ZEvent,
-    event_count: usize,
 
     // Docking
     docking_ctx: DockingContext,
@@ -108,16 +107,12 @@ pub const Editor = struct {
     // Run loop control
     running: bool,
 
-    // Simple time tracking
-    delta_time: f32,
-    last_frame: f32,
+    time: runtime.Time,
 
     // Play state
     play_state: PlayState,
-    editor_camera: Camera,
-    scene_camera: *Camera,
-    initial_game_camera: Camera,
-    saved_game_camera: Camera,
+    editor_camera_handle: CameraHandle,
+    scene_camera_handle: CameraHandle,
     scene_panel_bounds: Rect,
 
     // Scene state snapshot (saved on Play, restored on Stop)
@@ -134,7 +129,7 @@ pub const Editor = struct {
     // Shadow mapping
     shadow_map: ShadowMap,
 
-    pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene, scene_camera: *Camera) !*Editor {
+    pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene) !*Editor {
         const self = try allocator.create(Editor);
 
         const props = app.getProps();
@@ -143,6 +138,11 @@ pub const Editor = struct {
 
         const renderer = try opengl.createEmbeddedRenderer(allocator);
 
+        const scene_camera_handle = AssetManager.GetActiveCameraHandle().?;
+        const cam = AssetManager.GetCamera(scene_camera_handle);
+        const editor_camera_handle = try AssetManager.PushCamera(allocator, cam.*);
+        cam.setActive(false);
+
         self.* = Editor{
             .app = app,
             .scene = scene,
@@ -150,8 +150,6 @@ pub const Editor = struct {
             .renderer = renderer,
             .gui_ctx = undefined,
             .input_bridge = undefined,
-            .event_buffer = undefined,
-            .event_count = 0,
             .docking_ctx = undefined,
             .game_framebuffer = undefined,
             .game_texture_handle = undefined,
@@ -164,13 +162,10 @@ pub const Editor = struct {
             .content_scale_x = props.content_scale_x,
             .content_scale_y = props.content_scale_y,
             .running = true,
-            .delta_time = 0.0,
-            .last_frame = 0.0,
+            .time = runtime.Time.init(),
             .play_state = .editing,
-            .editor_camera = scene_camera.*,
-            .scene_camera = scene_camera,
-            .initial_game_camera = scene_camera.*,
-            .saved_game_camera = scene_camera.*,
+            .editor_camera_handle = editor_camera_handle,
+            .scene_camera_handle = scene_camera_handle,
             .scene_panel_bounds = .{ .x = 0, .y = 0, .w = 0, .h = 0 },
             .scene_snapshot = runtime.SceneSnapshot.init(),
             .selected_object = null,
@@ -180,7 +175,6 @@ pub const Editor = struct {
             .shadow_map = try ShadowMap.init(allocator, 2048, 20.0),
         };
 
-        // Create cursors
         cursor_arrow = Window.createStandardCursor(.arrow);
         cursor_ibeam = Window.createStandardCursor(.ibeam);
         cursor_hand = Window.createStandardCursor(.hand);
@@ -188,7 +182,6 @@ pub const Editor = struct {
         cursor_vresize = Window.createStandardCursor(.vresize);
         cursor_crosshair = Window.createStandardCursor(.crosshair);
 
-        // Create GUI context
         const platform = PlatformCallbacks{
             .getTime = getTime,
             .setCursor = setCursorCallback,
@@ -212,26 +205,21 @@ pub const Editor = struct {
 
         self.gui_ctx = gui_ctx;
 
-        // Create input bridge
         self.input_bridge = InputBridge.init(gui_ctx);
 
-        // Create framebuffer for game rendering
         const fb_width: i32 = @intFromFloat(width * 0.6);
         const fb_height: i32 = @intFromFloat(height * 0.7);
         self.game_framebuffer = try Framebuffer.init(fb_width, fb_height);
 
-        // Wrap framebuffer texture for GUI display
         self.game_texture_handle = self.renderer.wrapTexture(
             self.game_framebuffer.getColorTexture(),
             fb_width,
             fb_height,
         );
 
-        // Create picking system and outline renderer
         self.picking_system = try PickingSystem.init(allocator, fb_width, fb_height);
         self.outline_renderer = try OutlineRenderer.init(allocator);
 
-        // Initialize docking context with bounds below menu bar
         const dock_bounds = Rect{
             .x = 0,
             .y = menu_height,
@@ -240,7 +228,6 @@ pub const Editor = struct {
         };
         self.docking_ctx = try DockingContext.init(allocator, dock_bounds);
 
-        // Register panels
         try self.docking_ctx.registerPanel(PanelInfo{
             .id = utils.id("scene"),
             .title = "Scene",
@@ -277,7 +264,6 @@ pub const Editor = struct {
             .min_height = 100,
         });
 
-        // Try to load saved layout, otherwise add all panels
         const layout_loaded = try self.docking_ctx.loadLayout(layout_file);
         if (!layout_loaded) {
             try self.docking_ctx.addPanel(utils.id("scene"));
@@ -286,22 +272,15 @@ pub const Editor = struct {
             try self.docking_ctx.addPanel(utils.id("console"));
         }
 
-        // Set file-scope instance for panel render callbacks
         editor_instance = self;
 
-        // Replace Application's event callback with our own
         app.window.setEventCallback(self, editorEventCallback);
 
         return self;
     }
 
     fn handleEvent(self: *Editor, e: runtime.ZEvent) void {
-        // Buffer the event for replay after newFrame() in update.
-        if (self.event_count < self.event_buffer.len) {
-            self.event_buffer[self.event_count] = e;
-            self.event_count += 1;
-        }
-
+        self.input_bridge.processEvent(e);
         switch (e) {
             .KeyPressed => |key| {
                 if (key == .Escape) {
@@ -330,12 +309,11 @@ pub const Editor = struct {
         self.scene.onStartup(self.allocator);
 
         while (self.app.window.shouldCloseWindow() and self.running) {
-            const current_time: f32 = @floatCast(Window.GetTime());
-            self.delta_time = current_time - self.last_frame;
-            self.last_frame = current_time;
+            const current_time = Window.GetTime();
+            self.time.update(@floatCast(current_time));
 
             Window.HandleInput();
-            self.update(self.delta_time);
+            self.update(self.time.delta_time);
             self.app.window.swapBuffers();
             Input.Clear();
         }
@@ -363,16 +341,13 @@ pub const Editor = struct {
             const w: f32 = @floatFromInt(fbo_w);
             const h: f32 = @floatFromInt(fbo_h);
             if (h > 0) {
-                self.editor_camera.setAspectRatio(w / h);
+                AssetManager.GetCamera(self.editor_camera_handle).setAspectRatio(w / h);
+                AssetManager.GetCamera(self.scene_camera_handle).setAspectRatio(w / h);
             }
         }
 
         self.handleEditorCameraControls(delta_time);
         self.handleObjectSelection();
-
-        if (self.play_state != .playing) {
-            self.scene_camera.* = self.editor_camera;
-        }
 
         if (self.play_state != .playing) {
             Input.setEnabled(false);
@@ -408,11 +383,6 @@ pub const Editor = struct {
 
         self.gui_ctx.newFrame();
 
-        for (self.event_buffer[0..self.event_count]) |e| {
-            self.input_bridge.processEvent(e);
-        }
-        self.event_count = 0;
-
         self.gui_ctx.finalizeInjectedInput();
 
         self.docking_ctx.dock_space.bounds = Rect{
@@ -439,23 +409,24 @@ pub const Editor = struct {
         if (!in_scene) return;
 
         const speed = 0.2 * delta_time;
+        const editor_cam = AssetManager.GetCamera(self.editor_camera_handle);
 
         if (Input.IsButtonHeld(.Left)) {
             const delta = Input.GetMouseMoveDelta();
-            self.editor_camera.pan(delta.x, delta.y, speed * 10);
+            editor_cam.pan(delta.x, delta.y, speed * 10);
         } else if (Input.IsButtonHeld(.Right)) {
             const delta = Input.GetMouseMoveDelta();
-            self.editor_camera.fpsLook(delta.x, delta.y, speed * 10);
+            editor_cam.fpsLook(delta.x, delta.y, speed * 10);
         }
 
         if (Input.IsScrollingY()) {
             const delta = Input.GetMouseScroll();
-            self.editor_camera.zoom(delta.y, speed);
+            editor_cam.zoom(delta.y, speed);
         }
     }
 
     fn saveSceneState(self: *Editor) void {
-        self.scene_snapshot.save(self.allocator);
+        self.scene_snapshot.saveWithCamera(self.allocator, self.scene_camera_handle);
     }
 
     fn restoreSceneState(self: *Editor) void {
@@ -478,7 +449,7 @@ pub const Editor = struct {
         const local_x: i32 = @intFromFloat(mouse.x - b.x);
         const local_y: i32 = @intFromFloat(b.h - (mouse.y - b.y));
 
-        self.selected_object = self.picking_system.pick(&self.editor_camera, local_x, local_y);
+        self.selected_object = self.picking_system.pick(AssetManager.GetCamera(self.editor_camera_handle), local_x, local_y);
     }
 
     fn renderMenuBar(self: *Editor) void {
@@ -551,11 +522,12 @@ pub const Editor = struct {
 
 fn editorSceneDrawFn(pass: *RenderPass) void {
     const self = pass.getUserData(Editor) orelse return;
+    const active_camera = AssetManager.GetActiveCamera() orelse return;
 
-    self.scene.onUpdate(self.delta_time);
-    self.draw_list.collectFromScene(self.scene_camera) catch {};
+    self.scene.onUpdate(self.time.delta_time);
+    self.draw_list.collectFromScene(active_camera) catch {};
     self.draw_list.sortOpaque();
-    self.draw_list.execute(self.scene_camera);
+    self.draw_list.execute(active_camera);
 
     // Render outline for selected object
     if (self.play_state != .playing) {
@@ -565,7 +537,7 @@ fn editorSceneDrawFn(pass: *RenderPass) void {
                 @as(f32, 0x6b) / 255.0,
                 @as(f32, 0xe7) / 255.0,
             );
-            self.outline_renderer.draw(&self.editor_camera, sel, outline_color, 1.03);
+            self.outline_renderer.draw(AssetManager.GetCamera(self.editor_camera_handle), sel, outline_color, 1.03);
         }
     }
 }
@@ -595,29 +567,34 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
         .editing => {
             if (btn.button(ctx, "Play", btn_opts)) {
                 self.saveSceneState();
-                self.scene_camera.* = self.initial_game_camera;
-                self.scene_camera.setAspectRatio(self.editor_camera.aspect_ratio);
+                const editor_cam = AssetManager.GetCamera(self.editor_camera_handle);
+                const scene_cam = AssetManager.GetCamera(self.scene_camera_handle);
+                scene_cam.setAspectRatio(editor_cam.aspect_ratio);
+                editor_cam.setActive(false);
+                scene_cam.setActive(true);
                 self.play_state = .playing;
                 self.selected_object = null;
             }
         },
         .playing => {
             if (btn.button(ctx, "Pause", btn_opts)) {
-                self.saved_game_camera = self.scene_camera.*;
                 self.play_state = .paused;
             }
             if (btn.button(ctx, "Stop", btn_opts)) {
                 self.restoreSceneState();
+                AssetManager.GetCamera(self.scene_camera_handle).setActive(false);
+                AssetManager.GetCamera(self.editor_camera_handle).setActive(true);
                 self.play_state = .editing;
             }
         },
         .paused => {
             if (btn.button(ctx, "Resume", btn_opts)) {
-                self.scene_camera.* = self.saved_game_camera;
                 self.play_state = .playing;
             }
             if (btn.button(ctx, "Stop", btn_opts)) {
                 self.restoreSceneState();
+                AssetManager.GetCamera(self.scene_camera_handle).setActive(false);
+                AssetManager.GetCamera(self.editor_camera_handle).setActive(true);
                 self.play_state = .editing;
             }
         },
