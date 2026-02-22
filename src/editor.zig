@@ -93,16 +93,12 @@ pub const Editor = struct {
     // Game rendering
     game_framebuffer: Framebuffer,
     game_texture_handle: TextureHandle,
-    pending_fbo_width: i32,
-    pending_fbo_height: i32,
+    pending_fbo_size: runtime.Vec2(i32),
 
     // Dimensions (logical = window size, fb = framebuffer/physical size)
-    window_width: f32,
-    window_height: f32,
-    fb_width: u32,
-    fb_height: u32,
-    content_scale_x: f32,
-    content_scale_y: f32,
+    window_size: runtime.Vec2(f32),
+    fb_size: runtime.Vec2(u32),
+    content_scale: runtime.Vec2(f32),
 
     // Run loop control
     running: bool,
@@ -153,14 +149,10 @@ pub const Editor = struct {
             .docking_ctx = undefined,
             .game_framebuffer = undefined,
             .game_texture_handle = undefined,
-            .pending_fbo_width = 0,
-            .pending_fbo_height = 0,
-            .window_width = width,
-            .window_height = height,
-            .fb_width = props.fb_width,
-            .fb_height = props.fb_height,
-            .content_scale_x = props.content_scale_x,
-            .content_scale_y = props.content_scale_y,
+            .pending_fbo_size = .{ .x = 0, .y = 0 },
+            .window_size = .{ .x = width, .y = height },
+            .fb_size = .{ .x = props.fb_width, .y = props.fb_height },
+            .content_scale = .{ .x = props.content_scale_x, .y = props.content_scale_y },
             .running = true,
             .time = runtime.Time.init(),
             .play_state = .editing,
@@ -288,17 +280,17 @@ pub const Editor = struct {
                 }
             },
             .WindowResize => |resize| {
-                self.window_width = @floatFromInt(resize.width);
-                self.window_height = @floatFromInt(resize.height);
-                self.gui_ctx.setWindowSize(self.window_width, self.window_height);
+                self.window_size.x = @floatFromInt(resize.width);
+                self.window_size.y = @floatFromInt(resize.height);
+                self.gui_ctx.setWindowSize(self.window_size.x, self.window_size.y);
             },
             .FramebufferResize => |resize| {
-                self.fb_width = resize.width;
-                self.fb_height = resize.height;
+                self.fb_size.x = resize.width;
+                self.fb_size.y = resize.height;
             },
             .ContentScaleChange => |scale| {
-                self.content_scale_x = scale.x;
-                self.content_scale_y = scale.y;
+                self.content_scale.x = scale.x;
+                self.content_scale.y = scale.y;
                 self.gui_ctx.updateContentScale(scale.x, scale.y);
             },
             else => {},
@@ -324,19 +316,20 @@ pub const Editor = struct {
     }
 
     fn update(self: *Editor, delta_time: f32) void {
-        if (self.pending_fbo_width > 0 and self.pending_fbo_height > 0 and
-            (self.pending_fbo_width != self.game_framebuffer.width or
-                self.pending_fbo_height != self.game_framebuffer.height))
+        const pw = self.pending_fbo_size.x;
+        const ph = self.pending_fbo_size.y;
+        if (pw > 0 and ph > 0 and
+            (pw != self.game_framebuffer.width or ph != self.game_framebuffer.height))
         {
-            self.game_framebuffer.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
-            self.picking_system.resize(self.pending_fbo_width, self.pending_fbo_height) catch {};
+            self.game_framebuffer.resize(pw, ph) catch {};
+            self.picking_system.resize(pw, ph) catch {};
             self.game_texture_handle = self.renderer.wrapTexture(
                 self.game_framebuffer.getColorTexture(),
-                self.pending_fbo_width,
-                self.pending_fbo_height,
+                pw,
+                ph,
             );
-            const fbo_w: u32 = @intCast(self.pending_fbo_width);
-            const fbo_h: u32 = @intCast(self.pending_fbo_height);
+            const fbo_w: u32 = @intCast(pw);
+            const fbo_h: u32 = @intCast(ph);
             self.scene.onEvent(.{ .WindowResize = .{ .width = fbo_w, .height = fbo_h } });
             const w: f32 = @floatFromInt(fbo_w);
             const h: f32 = @floatFromInt(fbo_h);
@@ -376,8 +369,8 @@ pub const Editor = struct {
 
         Input.setEnabled(true);
 
-        const fb_w: i32 = @intCast(self.fb_width);
-        const fb_h: i32 = @intCast(self.fb_height);
+        const fb_w: i32 = @intCast(self.fb_size.x);
+        const fb_h: i32 = @intCast(self.fb_size.y);
         RenderCommand.SetViewport(0, 0, fb_w, fb_h);
         RenderCommand.Clear(.{ .x = 0.15, .y = 0.15, .z = 0.18 });
 
@@ -388,8 +381,8 @@ pub const Editor = struct {
         self.docking_ctx.dock_space.bounds = Rect{
             .x = 0,
             .y = menu_height,
-            .w = self.window_width,
-            .h = self.window_height - menu_height,
+            .w = self.window_size.x,
+            .h = self.window_size.y - menu_height,
         };
 
         self.renderMenuBar();
@@ -455,7 +448,7 @@ pub const Editor = struct {
     fn renderMenuBar(self: *Editor) void {
         const ctx = self.gui_ctx;
 
-        const menu_rect = Rect{ .x = 0, .y = 0, .w = self.window_width, .h = menu_height };
+        const menu_rect = Rect{ .x = 0, .y = 0, .w = self.window_size.x, .h = menu_height };
         ctx.draw_list.addRect(menu_rect, ctx.theme.bg_secondary) catch {};
 
         layout.beginLayout(ctx, layout.Layout.init(.HORIZONTAL, 0, 0, .{
@@ -614,8 +607,7 @@ fn renderScenePanel(ctx: *GuiContext, bounds: Rect) !void {
     const new_width: i32 = @intFromFloat(scene_bounds.w);
     const new_height: i32 = @intFromFloat(scene_bounds.h);
     if (new_width > 0 and new_height > 0) {
-        self.pending_fbo_width = new_width;
-        self.pending_fbo_height = new_height;
+        self.pending_fbo_size = .{ .x = new_width, .y = new_height };
     }
 
     try ctx.draw_list.setTexture(self.game_texture_handle);
