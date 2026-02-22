@@ -1,6 +1,6 @@
-split horizontal 0.216833
+split horizontal 0.194541
   tabgroup 0 6642745922151558057
-  split horizontal 0.849200
+  split horizontal 0.782089
     split vertical 0.714130
       tabgroup 0 13133716821201213471
       tabgroup 0 1706968998288843499

@@ -62,7 +62,7 @@ pub const GameScene = struct {
             .metallic_roughness = @embedFile("assets/meshes/backpack/Scene_-_Root_metallicRoughness.png"),
             .normal = @embedFile("assets/meshes/backpack/Scene_-_Root_normal.png"),
             .transform = .{
-                .position = .{ .x = 400, .y = 0, .z = 0 },
+                .position = .{ .x = 400, .y = 100, .z = 0 },
                 .scale = .{ .x = 0.01, .y = 0.01, .z = 0.01 },
             },
         });
@@ -114,7 +114,6 @@ pub const GameScene = struct {
         } else if (Input.IsKeyHeld(.S)) {
             model.transform.translate(.{ .x = 0, .y = 0, .z = speed });
         }
-
     }
 
     pub fn onEvent(_: *GameScene, e: runtime.ZEvent) void {
