@@ -5,7 +5,7 @@ const GameScene = @import("game_scene.zig").GameScene;
 
 pub const std_options = runtime.recommended_std_options;
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
@@ -26,7 +26,7 @@ pub fn main() !void {
         application.run();
     } else {
         const Editor = @import("editor.zig").Editor;
-        var editor = try Editor.init(allocator, application, runtime.Scene.init(game_scene));
+        var editor = try Editor.init(allocator, init.io, application, runtime.Scene.init(game_scene));
         defer editor.deinit();
 
         editor.run();

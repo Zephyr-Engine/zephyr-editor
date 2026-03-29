@@ -79,6 +79,7 @@ const PlayState = enum {
 
 pub const Editor = struct {
     app: *runtime.Application,
+    io: std.Io,
     scene: runtime.Scene,
     allocator: std.mem.Allocator,
 
@@ -125,7 +126,7 @@ pub const Editor = struct {
     // Shadow mapping
     shadow_map: ShadowMap,
 
-    pub fn init(allocator: std.mem.Allocator, app: *runtime.Application, scene: runtime.Scene) !*Editor {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, app: *runtime.Application, scene: runtime.Scene) !*Editor {
         const self = try allocator.create(Editor);
 
         const props = app.getProps();
@@ -141,6 +142,7 @@ pub const Editor = struct {
 
         self.* = Editor{
             .app = app,
+            .io = io,
             .scene = scene,
             .allocator = allocator,
             .renderer = renderer,
@@ -185,6 +187,7 @@ pub const Editor = struct {
             &self.renderer,
             font_data,
             platform,
+            io,
         );
         gui_ctx.setWindowSize(width, height);
         gui_ctx.updateContentScale(props.content_scale_x, props.content_scale_y);
@@ -256,7 +259,7 @@ pub const Editor = struct {
             .min_height = 100,
         });
 
-        const layout_loaded = try self.docking_ctx.loadLayout(layout_file);
+        const layout_loaded = try self.docking_ctx.loadLayout(layout_file, io);
         if (!layout_loaded) {
             try self.docking_ctx.addPanel(utils.id("scene"));
             try self.docking_ctx.addPanel(utils.id("hierarchy"));
@@ -477,7 +480,7 @@ pub const Editor = struct {
     }
 
     pub fn deinit(self: *Editor) void {
-        self.docking_ctx.saveLayout(layout_file) catch |err| {
+        self.docking_ctx.saveLayout(layout_file, self.io) catch |err| {
             std.log.warn("Failed to save layout: {}", .{err});
         };
 
