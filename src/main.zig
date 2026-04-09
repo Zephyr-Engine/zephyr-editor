@@ -17,7 +17,7 @@ pub fn main() void {
         std.log.err("Application init failed: {}", .{err});
         return;
     };
-    defer app.deinit();
+    defer app.deinit() catch |err| std.log.err("Application deinit failed: {}", .{err});
 
     app.pushScene(GameScene, true);
     app.run();

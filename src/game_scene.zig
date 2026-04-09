@@ -30,7 +30,7 @@ pub const GameScene = struct {
     vao: VertexArray,
     offset: Vec2,
 
-    pub fn onStartup(self: *GameScene, allocator: std.mem.Allocator) void {
+    pub fn onStartup(self: *GameScene, allocator: std.mem.Allocator) !void {
         std.log.info("Starting up game scene", .{});
 
         self.offset = .{
@@ -50,7 +50,7 @@ pub const GameScene = struct {
         self.vao.setLayout();
     }
 
-    pub fn onUpdate(self: *GameScene, delta_time: f32) void {
+    pub fn onUpdate(self: *GameScene, delta_time: f32) !void {
         if (Input.IsKeyHeld(.A)) {
             self.offset.x -= speed * delta_time;
         }
@@ -71,14 +71,14 @@ pub const GameScene = struct {
         self.vao.draw();
     }
 
-    pub fn onEvent(self: *GameScene, e: zp.ZEvent) void {
+    pub fn onEvent(self: *GameScene, e: zp.ZEvent) !void {
         _ = self;
         _ = e;
     }
 
-    pub fn onCleanup(self: *GameScene, allocator: std.mem.Allocator) void {
+    pub fn onCleanup(self: *GameScene, allocator: std.mem.Allocator) !void {
         _ = allocator;
-        self.shader.deinit();
         std.log.info("Game Scene Cleaning up...", .{});
+        self.shader.deinit();
     }
 };
