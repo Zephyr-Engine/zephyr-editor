@@ -1,9 +1,10 @@
 #version 330 core
 
-in vec3 vertexPos;
+in vec3 vNormal;
 
 out vec4 FragColor;
 
 void main() {
-  FragColor = vec4(vertexPos.x + 0.5, vertexPos.y + 0.5, 0.5 - vertexPos.x, 1);
+  vec3 color = vNormal * 0.5 + 0.5;
+  FragColor = vec4(color, 1.0);
 }

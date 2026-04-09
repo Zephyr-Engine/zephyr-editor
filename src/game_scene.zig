@@ -2,22 +2,12 @@ const std = @import("std");
 const zp = @import("zephyr_runtime");
 
 const VertexArray = zp.VertexArray;
+const MeshHandle = zp.MeshHandle;
 const Shader = zp.Shader;
 const Input = zp.Input;
+const ZMesh = zp.ZMesh;
 const Vec2 = zp.Vec2;
 const gl = zp.gl;
-
-const vertices = [_]f32{
-    0.5, 0.5, 0.0, // top right
-    0.5, -0.5, 0.0, // bottom right
-    -0.5, -0.5, 0.0, // bottom left
-    -0.5, 0.5, 0.0, // top left
-};
-
-const indices = [_]u32{
-    0, 1, 3, // first triangle
-    1, 2, 3, // second triangle
-};
 
 const vs_src: [*c]const u8 = @embedFile("assets/shaders/vertex.glsl");
 const fs_src: [*c]const u8 = @embedFile("assets/shaders/fragment.glsl");
@@ -26,11 +16,11 @@ const speed: f32 = 2.0;
 
 pub const GameScene = struct {
     allocator: std.mem.Allocator,
+    mesh_handle: MeshHandle,
     shader: Shader,
-    vao: VertexArray,
     offset: Vec2,
 
-    pub fn onStartup(self: *GameScene, allocator: std.mem.Allocator) !void {
+    pub fn onStartup(self: *GameScene, allocator: std.mem.Allocator, io: std.Io) !void {
         std.log.info("Starting up game scene", .{});
 
         self.offset = .{
@@ -38,16 +28,14 @@ pub const GameScene = struct {
             .y = 0,
         };
         self.allocator = allocator;
-        self.vao = VertexArray.init(&vertices, &indices) catch |err| {
-            std.log.err("Error creating vertex array: {}", .{err});
-            return;
-        };
-        self.shader = Shader.init(allocator, vs_src, fs_src) catch |err| {
-            std.log.err("Error creating shader: {}", .{err});
-            return;
-        };
 
-        self.vao.setLayout();
+        const cwd = std.Io.Dir.cwd();
+        const mesh_file = try cwd.openFile(io, "src/output/triangle.zmesh", .{});
+        var mesh = try ZMesh.read(allocator, io, mesh_file);
+        defer mesh.deinit(allocator);
+
+        self.mesh_handle = try MeshHandle.loadFromZMesh(mesh);
+        self.shader = try Shader.init(allocator, vs_src, fs_src);
     }
 
     pub fn onUpdate(self: *GameScene, delta_time: f32) !void {
@@ -68,7 +56,7 @@ pub const GameScene = struct {
         gl.glClear(gl.GL_COLOR_BUFFER_BIT);
 
         self.shader.setUniform("u_offset", self.offset);
-        self.vao.draw();
+        self.mesh_handle.draw();
     }
 
     pub fn onEvent(self: *GameScene, e: zp.ZEvent) !void {
@@ -80,5 +68,6 @@ pub const GameScene = struct {
         _ = allocator;
         std.log.info("Game Scene Cleaning up...", .{});
         self.shader.deinit();
+        self.mesh_handle.deinit();
     }
 };

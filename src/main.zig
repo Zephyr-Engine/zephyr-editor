@@ -4,12 +4,8 @@ const GameScene = @import("game_scene.zig").GameScene;
 
 pub const std_options = zp.recommended_std_options;
 
-pub fn main() void {
-    var gpa = std.heap.DebugAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const app = zp.Application.init(allocator, .{
+pub fn main(init: std.process.Init) void {
+    const app = zp.Application.init(init.gpa, init.io, .{
         .title = "Zephyr Engine",
         .width = null,
         .height = null,
