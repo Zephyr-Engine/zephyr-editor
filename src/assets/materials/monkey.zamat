@@ -1,0 +1,13 @@
+[material]
+shader = "shaders/basic"
+alpha_mode = "solid"
+
+[textures]
+albedo = "textures/brick_albedo.jpg"
+
+[params]
+u_base_color = [1.0, 1.0, 1.0, 1.0]
+u_uv_scale = [8.0, 8.0]
+u_metallic = 0.0
+u_roughness = 0.65
+u_emissive = [0.0, 0.0, 0.0]

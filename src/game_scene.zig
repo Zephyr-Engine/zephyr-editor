@@ -3,21 +3,19 @@ const zp = @import("zephyr_runtime");
 
 const EditorCamera = zp.EditorCamera;
 const MeshHandle = zp.MeshHandle;
-const Shader = zp.Shader;
+const Material = zp.Material;
+const ZShader = zp.ZShader;
 const Input = zp.Input;
 const ZMesh = zp.ZMesh;
 const Vec3 = zp.Vec3;
 const gl = zp.gl;
-
-const vs_src: [*c]const u8 = @embedFile("assets/shaders/vertex.glsl");
-const fs_src: [*c]const u8 = @embedFile("assets/shaders/fragment.glsl");
 
 const speed: f32 = 2.0;
 
 pub const GameScene = struct {
     allocator: std.mem.Allocator,
     mesh_handle: MeshHandle,
-    shader: Shader,
+    material: Material,
     editor_camera: EditorCamera,
 
     pub fn onStartup(self: *GameScene, allocator: std.mem.Allocator, io: std.Io) !void {
@@ -31,11 +29,18 @@ pub const GameScene = struct {
 
         const cwd = std.Io.Dir.cwd();
         const mesh_file = try cwd.openFile(io, "src/output/monkey.zmesh", .{});
+        defer mesh_file.close(io);
+
         var mesh = try ZMesh.read(allocator, io, mesh_file);
         defer mesh.deinit(allocator);
 
         self.mesh_handle = try MeshHandle.loadFromZMesh(mesh);
-        self.shader = try Shader.init(allocator, vs_src, fs_src);
+        self.material = try Material.load(
+            allocator,
+            io,
+            cwd,
+            "src/output/monkey.zamat",
+        );
 
         gl.glEnable(gl.GL_DEPTH_TEST);
     }
@@ -47,8 +52,9 @@ pub const GameScene = struct {
         gl.glClearColor(0.4, 0.4, 0.4, 1);
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
-        self.shader.setUniform("u_view", self.editor_camera.camera.viewMatrix());
-        self.shader.setUniform("u_projection", self.editor_camera.camera.projectionMatrix());
+        self.material.bind();
+        self.material.setUniform("u_view", self.editor_camera.camera.viewMatrix());
+        self.material.setUniform("u_projection", self.editor_camera.camera.projectionMatrix());
         self.mesh_handle.draw();
     }
 
@@ -59,7 +65,7 @@ pub const GameScene = struct {
     pub fn onCleanup(self: *GameScene, allocator: std.mem.Allocator) !void {
         _ = allocator;
         std.log.info("Game Scene Cleaning up...", .{});
-        self.shader.deinit();
+        self.material.deinit();
         self.mesh_handle.deinit();
     }
 };

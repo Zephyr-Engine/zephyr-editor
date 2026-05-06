@@ -1,0 +1,12 @@
+# Auto-generated from meshes/triangle.glb - DefaultMaterial
+[material]
+shader = "shaders/basic"
+alpha_mode = "solid"
+
+[textures]
+
+[params]
+u_base_color = [0.8, 0.2, 0.2, 1]
+u_metallic = 0.000000
+u_roughness = 0.800000
+u_emissive = [0, 0, 0]
