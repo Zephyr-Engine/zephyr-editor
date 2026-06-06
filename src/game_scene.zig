@@ -2,70 +2,52 @@ const std = @import("std");
 const zp = @import("zephyr_runtime");
 
 const EditorCamera = zp.EditorCamera;
-const MeshHandle = zp.MeshHandle;
 const Material = zp.Material;
-const ZShader = zp.ZShader;
-const Input = zp.Input;
-const ZMesh = zp.ZMesh;
+const AssetId = zp.AssetId;
 const Vec3 = zp.Vec3;
+const Mesh = zp.Mesh;
 const gl = zp.gl;
 
-const speed: f32 = 2.0;
-
 pub const GameScene = struct {
-    allocator: std.mem.Allocator,
-    mesh_handle: MeshHandle,
-    material: Material,
+    mesh: AssetId,
+    material: AssetId,
     editor_camera: EditorCamera,
 
-    pub fn onStartup(self: *GameScene, allocator: std.mem.Allocator, io: std.Io) !void {
+    pub fn onStartup(self: *GameScene, ctx: *zp.RuntimeContext) !void {
         std.log.info("Starting up game scene", .{});
 
         self.editor_camera = EditorCamera.init(
             Vec3.new(0, 0, 3),
             16.0 / 9.0,
         );
-        self.allocator = allocator;
 
-        const cwd = std.Io.Dir.cwd();
-        const mesh_file = try cwd.openFile(io, "src/output/monkey.zmesh", .{});
-        defer mesh_file.close(io);
-
-        var mesh = try ZMesh.read(allocator, io, mesh_file);
-        defer mesh.deinit(allocator);
-
-        self.mesh_handle = try MeshHandle.loadFromZMesh(mesh);
-        self.material = try Material.load(
-            allocator,
-            io,
-            cwd,
-            "src/output/monkey.zamat",
-        );
+        self.mesh = try ctx.assets.register(Mesh, "monkey.zmesh");
+        self.material = try ctx.assets.register(Material, "monkey.zamat");
 
         gl.glEnable(gl.GL_DEPTH_TEST);
     }
 
-    pub fn onUpdate(self: *GameScene, delta_time: f32) !void {
+    pub fn onUpdate(self: *GameScene, ctx: *zp.RuntimeContext, delta_time: f32) !void {
         _ = delta_time;
         self.editor_camera.update();
 
         gl.glClearColor(0.4, 0.4, 0.4, 1);
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
-        self.material.bind();
-        self.material.setUniform("u_view", self.editor_camera.camera.viewMatrix());
-        self.material.setUniform("u_projection", self.editor_camera.camera.projectionMatrix());
-        self.mesh_handle.draw();
+        const material = ctx.assets.get(Material, self.material) orelse return;
+        const mesh = ctx.assets.get(Mesh, self.mesh) orelse return;
+
+        material.bind();
+        material.setUniform("u_view", self.editor_camera.camera.viewMatrix());
+        material.setUniform("u_projection", self.editor_camera.camera.projectionMatrix());
+        mesh.draw();
     }
 
-    pub fn onEvent(self: *GameScene, e: zp.ZEvent) !void {
+    pub fn onEvent(self: *GameScene, _: *zp.RuntimeContext, e: zp.ZEvent) !void {
         self.editor_camera.processEvent(e);
     }
 
-    pub fn onCleanup(self: *GameScene, allocator: std.mem.Allocator) !void {
-        _ = allocator;
+    pub fn onCleanup(_: *GameScene, _: *zp.RuntimeContext) !void {
         std.log.info("Game Scene Cleaning up...", .{});
-        self.material.deinit();
-        self.mesh_handle.deinit();
     }
 };

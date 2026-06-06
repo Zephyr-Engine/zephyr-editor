@@ -9,6 +9,9 @@ pub fn main(init: std.process.Init) void {
         .title = "Zephyr Engine",
         .width = null,
         .height = null,
+    }, .{
+        .cooked_root = "src/output",
+        .source_root = "src/assets",
     }) catch |err| {
         std.log.err("Application init failed: {}", .{err});
         return;
