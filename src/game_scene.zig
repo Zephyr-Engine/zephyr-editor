@@ -29,8 +29,10 @@ pub const GameScene = struct {
 
     pub fn onUpdate(self: *GameScene, ctx: *zp.RuntimeContext, delta_time: f32) !void {
         _ = delta_time;
+        self.editor_camera.camera.aspect = ctx.render_viewport.aspect();
         self.editor_camera.update();
 
+        gl.glEnable(gl.GL_DEPTH_TEST);
         gl.glClearColor(0.4, 0.4, 0.4, 1);
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
 
