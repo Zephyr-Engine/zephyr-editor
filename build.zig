@@ -10,6 +10,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     const runtime_mod = runtime_dep.module("zephyr_runtime");
+    const zgui_retained_dep = b.dependency("zGUI_retained", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const zgui_retained_mod = zgui_retained_dep.module("zGUI_retained");
 
     const zimp_dep = runtime_dep.builder.dependency("zimp", .{
         .target = target,
@@ -31,6 +36,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "zephyr_runtime", .module = runtime_mod },
+                .{ .name = "zGUI_retained", .module = zgui_retained_mod },
             },
         }),
     });
