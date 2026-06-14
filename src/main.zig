@@ -29,7 +29,7 @@ pub fn main(init: std.process.Init) !void {
 
     const font_bytes = try std.Io.Dir.cwd().readFileAlloc(
         init.io,
-        "../zGUI-retained/assets/fonts/Inter-Regular.ttf",
+        "../zGUI/assets/fonts/Inter-Regular.ttf",
         init.gpa,
         .limited(4 * 1024 * 1024),
     );
