@@ -1,10 +1,8 @@
+const ui = @import("zGUI");
 const std = @import("std");
 const zp = @import("zephyr_runtime");
-const ui = @import("zGUI_retained");
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
 const GameScene = @import("game_scene.zig").GameScene;
-
-pub const std_options = zp.recommended_std_options;
 
 pub fn main(init: std.process.Init) !void {
     const app = zp.Application.init(init.gpa, init.io, .{

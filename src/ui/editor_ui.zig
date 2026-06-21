@@ -1,5 +1,5 @@
 const std = @import("std");
-const ui = @import("zGUI_retained");
+const ui = @import("zGUI");
 
 const console = @import("console.zig");
 const inspector = @import("inspector.zig");

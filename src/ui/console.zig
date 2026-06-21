@@ -1,4 +1,4 @@
-const ui = @import("zGUI_retained");
+const ui = @import("zGUI");
 
 pub fn build(state: *ui.Ui, parent: ui.NodeId) !ui.NodeId {
     const panel = try ui.widgets.column(state, parent, .{

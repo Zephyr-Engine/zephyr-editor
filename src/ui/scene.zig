@@ -1,4 +1,4 @@
-const ui = @import("zGUI_retained");
+const ui = @import("zGUI");
 
 const panel_vertical_inset: f32 = 10;
 

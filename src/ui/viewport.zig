@@ -1,4 +1,4 @@
-const ui = @import("zGUI_retained");
+const ui = @import("zGUI");
 
 pub fn build(state: *ui.Ui, parent: ui.NodeId) !ui.NodeId {
     return ui.widgets.image(state, parent, .{
