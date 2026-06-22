@@ -1,10 +1,11 @@
 const std = @import("std");
 const zp = @import("zephyr_runtime");
+const Game = @import("game.zig");
 const editor_components = @import("editor_components.zig");
 
 pub const max_pitch: f32 = std.math.pi / 2.0 - 0.02;
 
-pub fn updateActive(world: anytype, input: *const zp.Input) void {
+pub fn updateActive(world: *Game.Ecs.World, input: *const zp.Input) void {
     const entity = zp.activeCamera(world) orelse return;
     const transform = world.getComponent(entity, zp.components.TransformComponent) orelse return;
     const controller = world.getComponent(entity, editor_components.FlyCameraController) orelse return;
