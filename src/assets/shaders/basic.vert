@@ -21,6 +21,7 @@ vec3 decodeOctNormal(vec2 enc) {
 
 void main() {
     gl_Position = u_projection * u_view * u_model * vec4(aPos, 1.0);
-    v_normal = decodeOctNormal(aNormal);
+    mat3 normal_matrix = transpose(inverse(mat3(u_model)));
+    v_normal = normalize(normal_matrix * decodeOctNormal(aNormal));
     v_uv = aUv;
 }
