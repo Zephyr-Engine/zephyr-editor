@@ -1,29 +1,31 @@
 const std = @import("std");
 const zp = @import("zephyr_runtime");
+const editor_components = @import("editor_components.zig");
 
 pub const max_pitch: f32 = std.math.pi / 2.0 - 0.02;
 
-pub fn updateActive(world: *zp.ecs.World) void {
+pub fn updateActive(world: anytype, input: *const zp.Input) void {
     const entity = zp.activeCamera(world) orelse return;
     const transform = world.getComponent(entity, zp.components.TransformComponent) orelse return;
-    const controller = world.getComponent(entity, zp.components.FlyCameraController) orelse return;
-    update(transform, controller);
+    const controller = world.getComponent(entity, editor_components.FlyCameraController) orelse return;
+    update(transform, controller, input);
 }
 
 pub fn update(
     transform: *zp.components.TransformComponent,
-    controller: *zp.components.FlyCameraController,
+    controller: *editor_components.FlyCameraController,
+    input: *const zp.Input,
 ) void {
-    const delta = zp.Input.GetMouseMoveDelta();
+    const delta = input.mouse_delta;
 
-    if (zp.Input.IsButtonHeld(.Right)) {
+    if (input.isButtonHeld(.Right)) {
         controller.yaw -= delta.x * controller.look_sensitivity;
         controller.pitch -= delta.y * controller.look_sensitivity;
         controller.pitch = std.math.clamp(controller.pitch, -max_pitch, max_pitch);
         transform.rotation = orientation(controller.yaw, controller.pitch);
     }
 
-    if (zp.Input.IsButtonHeld(.Left)) {
+    if (input.isButtonHeld(.Left)) {
         transform.position = transform.position.sub(
             transform.right().scale(delta.x * controller.pan_sensitivity),
         );
@@ -32,7 +34,7 @@ pub fn update(
         );
     }
 
-    const scroll = zp.Input.GetMouseMoveScroll();
+    const scroll = input.mouse_scroll;
     if (scroll.y != 0) {
         transform.position = transform.position.add(
             transform.forward().scale(scroll.y * controller.zoom_speed),
