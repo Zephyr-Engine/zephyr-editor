@@ -1,8 +1,8 @@
 const std = @import("std");
 
+const editor_components = @import("editor_components.zig");
 const game_components = @import("game_components.zig");
 const editor_camera = @import("editor_camera.zig");
-const editor_components = @import("editor_components.zig");
 const zp = @import("zephyr_runtime");
 const Game = @import("game.zig");
 

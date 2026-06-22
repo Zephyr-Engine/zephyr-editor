@@ -1,7 +1,8 @@
 const std = @import("std");
+
+const editor_components = @import("editor_components.zig");
 const zp = @import("zephyr_runtime");
 const Game = @import("game.zig");
-const editor_components = @import("editor_components.zig");
 
 pub const max_pitch: f32 = std.math.pi / 2.0 - 0.02;
 
