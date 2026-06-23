@@ -1,5 +1,6 @@
 const std = @import("std");
 const ui = @import("zGUI");
+const zp = @import("zephyr_runtime");
 
 const console = @import("console.zig");
 const inspector = @import("inspector.zig");
@@ -15,6 +16,7 @@ const min_main_height: f32 = 240;
 
 const EditorNodes = struct {
     viewport_image: ui.NodeId,
+    viewport_stats: viewport.Nodes,
     dock_host: ui.NodeId,
     left_panel: ui.NodeId,
     center_panel: ui.NodeId,
@@ -30,6 +32,7 @@ pub const EditorUi = struct {
     dock: ui.DockSpace,
     refs: EditorDockRefs,
     nodes: EditorNodes,
+    stats_text: [128]u8 = undefined,
 
     pub fn init(allocator: std.mem.Allocator, state: *ui.Ui) !EditorUi {
         state.setTheme(ui.theme.zephyr_dark);
@@ -68,6 +71,10 @@ pub const EditorUi = struct {
 
     pub fn setViewportTexture(self: *const EditorUi, state: *ui.Ui, texture_id: u32) void {
         viewport.setTexture(state, self.nodes.viewport_image, texture_id);
+    }
+
+    pub fn setDebugStats(self: *EditorUi, state: *ui.Ui, stats: ?zp.DebugStats) void {
+        viewport.setStats(state, self.nodes.viewport_stats, &self.stats_text, stats);
     }
 
     pub fn viewportRect(self: *const EditorUi) ui.Rect {
@@ -117,15 +124,16 @@ fn createEditorTree(state: *ui.Ui) !EditorNodes {
     });
 
     const scene_panel = try scene.build(state, dock_host);
-    const viewport_image = try viewport.build(state, dock_host);
+    const viewport_nodes = try viewport.build(state, dock_host);
     const inspector_panel = try inspector.build(state, dock_host);
     const console_panel = try console.build(state, dock_host);
 
     return .{
-        .viewport_image = viewport_image,
+        .viewport_image = viewport_nodes.image,
+        .viewport_stats = viewport_nodes,
         .dock_host = dock_host,
         .left_panel = scene_panel,
-        .center_panel = viewport_image,
+        .center_panel = viewport_nodes.root,
         .right_panel = inspector_panel,
         .console_panel = console_panel,
     };

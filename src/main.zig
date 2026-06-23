@@ -20,6 +20,7 @@ pub fn main(init: std.process.Init) !void {
         return;
     };
     defer app.deinit() catch |err| std.log.err("Application deinit failed: {}", .{err});
+    app.setDebugStatsEnabled(true);
 
     app.pushScene(GameScene, true);
     try app.start();
@@ -62,6 +63,7 @@ pub fn main(init: std.process.Init) !void {
         _ = try editor.dockSpace(&ui_state, ui_frame.window_size);
         ui.zephyr_runtime.setCursor(app.window, ui_state.requestedCursor());
         editor.setViewportTexture(&ui_state, viewport.textureId());
+        editor.setDebugStats(&ui_state, app.debugStats());
 
         ui_state.setTextRasterScale(ui_frame.text_raster_scale);
         try ui_state.endFrame();
