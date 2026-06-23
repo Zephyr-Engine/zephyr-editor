@@ -1,0 +1,64 @@
+const std = @import("std");
+
+const editor_components = @import("editor_components.zig");
+const game_types = @import("game_types.zig");
+const zp = @import("zephyr_runtime");
+
+pub const max_pitch: f32 = std.math.pi / 2.0 - 0.02;
+
+pub fn updateActive(world: *game_types.Ecs.World, input: *const zp.Input) void {
+    const entity = zp.activeCamera(world) orelse return;
+    const transform = world.getComponent(entity, zp.components.TransformComponent) orelse return;
+    const controller = world.getComponent(entity, editor_components.FlyCameraController) orelse return;
+    update(transform, controller, input);
+}
+
+pub fn updateActiveSystem(world: *game_types.Ecs.World, _: *game_types.Ecs.CommandBuffer) !void {
+    updateActive(world, world.getResource(zp.Input));
+}
+
+pub fn update(
+    transform: *zp.components.TransformComponent,
+    controller: *editor_components.FlyCameraController,
+    input: *const zp.Input,
+) void {
+    const delta = input.mouse_delta;
+
+    if (input.isButtonHeld(.Right)) {
+        controller.yaw -= delta.x * controller.look_sensitivity;
+        controller.pitch -= delta.y * controller.look_sensitivity;
+        controller.pitch = std.math.clamp(controller.pitch, -max_pitch, max_pitch);
+        transform.rotation = orientation(controller.yaw, controller.pitch);
+    }
+
+    if (input.isButtonHeld(.Left)) {
+        transform.position = transform.position.sub(
+            transform.right().scale(delta.x * controller.pan_sensitivity),
+        );
+        transform.position = transform.position.sub(
+            transform.up().scale(delta.y * controller.pan_sensitivity),
+        );
+    }
+
+    const scroll = input.mouse_scroll;
+    if (scroll.y != 0) {
+        transform.position = transform.position.add(
+            transform.forward().scale(scroll.y * controller.zoom_speed),
+        );
+    }
+}
+
+fn orientation(yaw: f32, pitch: f32) zp.Quat {
+    const yaw_rotation = zp.Quat.fromAxisAngle(zp.Vec3.new(0, 1, 0), yaw);
+    const pitch_rotation = zp.Quat.fromAxisAngle(zp.Vec3.new(1, 0, 0), pitch);
+    return yaw_rotation.mul(pitch_rotation);
+}
+
+test "editor camera orientation uses controller yaw and pitch" {
+    const rotation = orientation(std.math.pi / 2.0, 0);
+    const forward = rotation.rotateVec3(zp.Vec3.new(0, 0, -1));
+
+    try std.testing.expectApproxEqAbs(@as(f32, -1), forward.x, 0.0001);
+    try std.testing.expectApproxEqAbs(@as(f32, 0), forward.y, 0.0001);
+    try std.testing.expectApproxEqAbs(@as(f32, 0), forward.z, 0.0001);
+}

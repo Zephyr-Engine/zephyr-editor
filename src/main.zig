@@ -1,11 +1,14 @@
-const ui = @import("zGUI");
 const std = @import("std");
-const zp = @import("zephyr_runtime");
+
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
 const GameScene = @import("game_scene.zig").GameScene;
+const zp = @import("zephyr_runtime");
+const Game = @import("game.zig");
+const ui = @import("zGUI");
 
 pub fn main(init: std.process.Init) !void {
-    const app = zp.Application.init(init.gpa, init.io, .{
+    const App = zp.Application(Game);
+    const app = App.init(init.gpa, init.io, .{
         .title = "Zephyr Editor",
         .width = null,
         .height = null,

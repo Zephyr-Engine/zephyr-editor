@@ -5,6 +5,7 @@ layout(location = 1) in vec2 aNormal;
 layout(location = 2) in vec2 aUv;
 
 uniform mat4 u_view;
+uniform mat4 u_model;
 uniform mat4 u_projection;
 
 out vec3 v_normal;
@@ -19,7 +20,8 @@ vec3 decodeOctNormal(vec2 enc) {
 }
 
 void main() {
-    gl_Position = u_projection * u_view * vec4(aPos, 1.0);
-    v_normal = decodeOctNormal(aNormal);
+    gl_Position = u_projection * u_view * u_model * vec4(aPos, 1.0);
+    mat3 normal_matrix = transpose(inverse(mat3(u_model)));
+    v_normal = normalize(normal_matrix * decodeOctNormal(aNormal));
     v_uv = aUv;
 }
