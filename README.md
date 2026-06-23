@@ -12,4 +12,3 @@ git clone git@github.com:Zephyr-Engine/zephyr-editor.git
 cd zephyr-editor
 zig build run
 ```
-```
