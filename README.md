@@ -13,4 +13,3 @@ cd zephyr-editor
 zig build run
 ```
 ```
-```
