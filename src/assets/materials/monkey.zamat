@@ -1,13 +1,24 @@
 [material]
 shader = "shaders/basic"
+
+[render_state]
 alpha_mode = "solid"
 
-[textures]
-albedo = "textures/brick_albedo.jpg"
+[texture.albedo]
+path = "textures/brick_albedo.jpg"
+resource = "u_albedo"
 
-[params]
-u_base_color = [1.0, 1.0, 1.0, 1.0]
-u_uv_scale = [8.0, 8.0]
-u_metallic = 0.0
-u_roughness = 0.65
-u_emissive = [0.0, 0.0, 0.0]
+[param.u_base_color]
+value = [1.0, 1.0, 1.0, 1.0]
+
+[param.u_uv_scale]
+value = [8.0, 8.0]
+
+[param.u_metallic]
+value = 0.0
+
+[param.u_roughness]
+value = 0.65
+
+[param.u_emissive]
+value = [0.0, 0.0, 0.0]
