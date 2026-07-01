@@ -29,7 +29,7 @@ pub fn build(b: *std.Build) void {
     cook_step.dependOn(&cook.step);
 
     const exe = b.addExecutable(.{
-        .name = "zephyr_sandbox",
+        .name = "zephyr_editor",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,

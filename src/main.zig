@@ -2,12 +2,13 @@ const std = @import("std");
 
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
 const GameScene = @import("game_scene.zig").GameScene;
+const SceneInputCapture = @import("scene_input_capture.zig").SceneInputCapture;
 const zp = @import("zephyr_runtime");
 const Game = @import("game.zig");
 const ui = @import("zGUI");
 
 pub fn main(init: std.process.Init) !void {
-    const App = zp.Application(Game);
+    const App = zp.RuntimeHost(Game.Ecs);
     const app = App.init(init.gpa, init.io, .{
         .title = "Zephyr Editor",
         .width = null,
@@ -52,11 +53,15 @@ pub fn main(init: std.process.Init) !void {
     var ui_backend = ui.zephyr_runtime.Backend.init(init.gpa);
     defer ui_backend.deinit();
 
-    var scene_capture: ui.zephyr_runtime.SceneInputCapture = .{};
+    var scene_capture: SceneInputCapture = .{};
 
     while (app.window.shouldCloseWindow()) {
         const runtime_events = app.beginFrame();
-        const ui_frame = try ui_backend.beginFrame(app, runtime_events);
+        const ui_frame = try ui_backend.beginFrame(.{
+            .window_size = ui.zephyr_runtime.toUiSize(app.window.getWindowSize()),
+            .framebuffer_size = ui.zephyr_runtime.toPixelSize(app.window.getFramebufferSize()),
+            .dt = app.time.delta_time,
+        }, runtime_events);
 
         try ui_state.beginFrame(ui_frame.toBeginFrame());
 
@@ -72,7 +77,12 @@ pub fn main(init: std.process.Init) !void {
         const render_size = ui.zephyr_runtime.renderSizeForRect(viewport_rect, ui_frame.text_raster_scale);
         try viewport.resize(render_size.width, render_size.height);
 
-        try ui.zephyr_runtime.processSceneEvents(app, runtime_events, viewport_rect, ui_state.input.mouse_pos, &scene_capture);
+        const input_capture = ui_state.inputCapture();
+        for (runtime_events) |event| {
+            if (scene_capture.accepts(event, viewport_rect, ui_state.input.mouse_pos, input_capture)) {
+                try app.processEvent(event);
+            }
+        }
         try app.pumpAssets();
         try app.renderScene(&viewport);
 
