@@ -2,10 +2,14 @@
     .name = .zephyr_sandbox,
     .version = "0.0.0",
     .fingerprint = 0x17eb05afbd037c12, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0-dev",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .zephyr_runtime = .{
             .path = "../zephyr-runtime",
+        },
+        .zGUI = .{
+            .url = "git+https://github.com/Zephyr-Engine/zGUI.git#1513ad8fcea6f6c59aba4312a3bcf6f3e12b745b",
+            .hash = "zGUI-0.0.0-LDuKkeXaDADXFNx9lvSxMoOKRWfQa5Ro4jU8S1X8mAb5",
         },
     },
     .paths = .{
