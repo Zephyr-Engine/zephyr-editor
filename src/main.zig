@@ -7,7 +7,7 @@ const Game = @import("game.zig");
 const ui = @import("zGUI");
 
 pub fn main(init: std.process.Init) !void {
-    _ = try zp.createProject(init.gpa, init.io, .{
+    const manifest = try zp.createProject(init.gpa, init.io, .{
         .root_path = "/home/jparsons/repos/zephyr/zephyr-editor",
         .name = "Zephyr Game Example",
     });
@@ -16,10 +16,8 @@ pub fn main(init: std.process.Init) !void {
     const app = App.init(init.gpa, init.io, .{
         .width = null,
         .height = null,
-    }, .{
-        .cooked_root = "src/output",
-        .source_root = "src/assets",
-    }) catch |err| {
+        .title = "Zephyr Editor",
+    }, manifest) catch |err| {
         std.log.err("Application init failed: {}", .{err});
         return;
     };
@@ -33,7 +31,9 @@ pub fn main(init: std.process.Init) !void {
     defer ui_renderer.deinit();
     std.log.info("OpenGL: {s}", .{ui.OpenGlRenderer.versionString()});
 
-    const font_bytes = @embedFile("assets/fonts/Inter-Regular.ttf");
+    const cwd = std.Io.Dir.cwd();
+    const font_bytes = try cwd.readFileAlloc(init.io, ".zephyr/assets/fonts/Inter-Regular.ttf", init.gpa, .limited(2 * 1024 * 1024));
+    defer init.gpa.free(font_bytes);
     var font_atlas = try ui.FontAtlas.init(
         init.gpa,
         font_bytes,
