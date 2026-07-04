@@ -7,9 +7,13 @@ const Game = @import("game.zig");
 const ui = @import("zGUI");
 
 pub fn main(init: std.process.Init) !void {
+    _ = try zp.createProject(init.gpa, init.io, .{
+        .root_path = "/home/jparsons/repos/zephyr/zephyr-editor",
+        .name = "Zephyr Game Example",
+    });
+
     const App = zp.Application(Game);
     const app = App.init(init.gpa, init.io, .{
-        .title = "Zephyr Editor",
         .width = null,
         .height = null,
     }, .{
