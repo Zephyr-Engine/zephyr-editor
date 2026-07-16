@@ -2,18 +2,27 @@ const std = @import("std");
 
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
 const GameScene = @import("game_scene.zig").GameScene;
+const cli = @import("cli/root.zig");
 const zp = @import("zephyr_runtime");
 const Game = @import("game.zig");
 const ui = @import("zGUI");
 
 pub fn main(init: std.process.Init) !void {
-    const project_root = try absoluteProjectRoot(init.gpa, init.io, ".");
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const options = cli.parse(args) catch |err| {
+        std.log.err("Invalid editor arguments: {}", .{err});
+        return;
+    };
+
+    const project_root = try cli.absoluteProjectRoot(init.gpa, init.io, options.root_path);
     defer init.gpa.free(project_root);
 
-    var project = try zp.createProject(init.gpa, init.io, .{
-        .root_path = project_root,
-        .name = "Zephyr Game Example",
-    });
+    if (options.create_project) {
+        try cli.createProject(init.gpa, init.io, project_root, options.project_name);
+        return;
+    }
+
+    var project = try zp.openProject(init.gpa, init.io, .{ .root_path = project_root });
     defer project.deinit(init.gpa, init.io);
 
     const App = zp.Application(Game);
@@ -89,12 +98,4 @@ pub fn main(init: std.process.Init) !void {
         try ui_renderer.endFrame();
         app.present();
     }
-}
-
-fn absoluteProjectRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8) ![:0]u8 {
-    if (std.fs.path.isAbsolute(root)) {
-        return allocator.dupeZ(u8, root);
-    }
-
-    return std.Io.Dir.cwd().realPathFileAlloc(io, root, allocator);
 }
