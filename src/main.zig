@@ -7,18 +7,21 @@ const Game = @import("game.zig");
 const ui = @import("zGUI");
 
 pub fn main(init: std.process.Init) !void {
-    const manifest = try zp.createProject(init.gpa, init.io, .{
-        .root_path = "/home/jparsons/repos/zephyr/zephyr-editor",
+    const project_root = try absoluteProjectRoot(init.gpa, init.io, ".");
+    defer init.gpa.free(project_root);
+
+    var project = try zp.createProject(init.gpa, init.io, .{
+        .root_path = project_root,
         .name = "Zephyr Game Example",
     });
-    defer manifest.deinit(init.gpa);
+    defer project.deinit(init.gpa, init.io);
 
     const App = zp.Application(Game);
     const app = App.init(init.gpa, init.io, .{
         .width = null,
         .height = null,
         .title = "Zephyr Editor",
-    }, manifest) catch |err| {
+    }, &project) catch |err| {
         std.log.err("Application init failed: {}", .{err});
         return;
     };
@@ -32,8 +35,7 @@ pub fn main(init: std.process.Init) !void {
     defer ui_renderer.deinit();
     std.log.info("OpenGL: {s}", .{ui.OpenGlRenderer.versionString()});
 
-    const cwd = std.Io.Dir.cwd();
-    const font_bytes = try cwd.readFileAlloc(init.io, ".zephyr/assets/fonts/Inter-Regular.ttf", init.gpa, .limited(2 * 1024 * 1024));
+    const font_bytes = try project.root_dir.readFileAlloc(init.io, ".zephyr/assets/fonts/Inter-Regular.ttf", init.gpa, .limited(2 * 1024 * 1024));
     defer init.gpa.free(font_bytes);
     var font_atlas = try ui.FontAtlas.init(
         init.gpa,
@@ -87,4 +89,12 @@ pub fn main(init: std.process.Init) !void {
         try ui_renderer.endFrame();
         app.present();
     }
+}
+
+fn absoluteProjectRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8) ![:0]u8 {
+    if (std.fs.path.isAbsolute(root)) {
+        return allocator.dupeZ(u8, root);
+    }
+
+    return std.Io.Dir.cwd().realPathFileAlloc(io, root, allocator);
 }
