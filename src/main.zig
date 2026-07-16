@@ -11,6 +11,7 @@ pub fn main(init: std.process.Init) !void {
         .root_path = "/home/jparsons/repos/zephyr/zephyr-editor",
         .name = "Zephyr Game Example",
     });
+    defer manifest.deinit(init.gpa);
 
     const App = zp.Application(Game);
     const app = App.init(init.gpa, init.io, .{
