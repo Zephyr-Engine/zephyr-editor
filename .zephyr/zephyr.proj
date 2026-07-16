@@ -1,0 +1,11 @@
+{
+  "format": "zephyr.proj",
+  "version": 1,
+  "name": "Zephyr Game Example",
+  "project_id": "bf5a424f-e93e-4977-9a7a-0c522318dfdc",
+  "assets_dir": ".zephyr/assets",
+  "scenes_dir": ".zephyr/scenes",
+  "generated_dir": ".zephyr",
+  "cooked_assets_dir": ".zephyr/cooked",
+  "default_scene": null
+}
