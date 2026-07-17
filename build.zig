@@ -21,10 +21,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
 
-    const cook = zp.addCookStep(b, zimp_dep, .{
-        .source_dir = b.path(".zephyr/assets"),
-        .output_dir = b.path(".zephyr/cooked"),
-    });
+    const cook = zp.addProjectCookStep(b, zimp_dep, b.path("."));
     const cook_step = b.step("cook", "Cook assets with zimp");
     cook_step.dependOn(&cook.step);
 
