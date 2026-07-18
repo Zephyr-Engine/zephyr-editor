@@ -75,12 +75,9 @@ pub fn setTexture(state: *ui.Ui, image: ui.NodeId, texture_id: u32) void {
 }
 
 pub fn setStats(state: *ui.Ui, nodes: Nodes, buffer: []u8, stats: ?zp.DebugStats) void {
-    const card = state.tree.get(nodes.stats_card) orelse return;
-    const label = state.tree.get(nodes.stats_label) orelse return;
-
     const snapshot = stats orelse {
-        card.flags.visible = false;
-        label.flags.visible = false;
+        setVisible(state, nodes.stats_card, false);
+        setVisible(state, nodes.stats_label, false);
         return;
     };
 
@@ -98,9 +95,15 @@ pub fn setStats(state: *ui.Ui, nodes: Nodes, buffer: []u8, stats: ?zp.DebugStats
             snapshot.cpu_time_ms,
         }) catch return;
 
-    card.flags.visible = true;
-    label.flags.visible = true;
-    label.text = text;
-    label.dirty.layout = true;
-    label.dirty.paint = true;
+    setVisible(state, nodes.stats_card, true);
+    setVisible(state, nodes.stats_label, true);
+    state.tree.setText(nodes.stats_label, text) catch return;
+}
+
+fn setVisible(state: *ui.Ui, id: ui.NodeId, visible: bool) void {
+    const node = state.tree.get(id) orelse return;
+    if (node.flags.visible == visible) return;
+    node.flags.visible = visible;
+    node.dirty.layout = true;
+    node.dirty.paint = true;
 }
