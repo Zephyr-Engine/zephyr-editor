@@ -7,5 +7,5 @@
   "scenes_dir": ".zephyr/scenes",
   "generated_dir": ".zephyr",
   "cooked_assets_dir": ".zephyr/cooked",
-  "default_scene": null
+  "default_scene": ".zephyr/scenes/main.scene.json"
 }

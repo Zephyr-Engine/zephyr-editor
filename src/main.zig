@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
-const GameScene = @import("game_scene.zig").GameScene;
 const cli = @import("cli/root.zig");
 const scene_input = @import("ui/scene_input.zig");
 const zp = @import("zephyr_runtime");
@@ -38,7 +37,6 @@ pub fn main(init: std.process.Init) !void {
     defer app.deinit() catch |err| std.log.err("Application deinit failed: {}", .{err});
     app.setDebugStatsEnabled(true);
 
-    app.pushScene(GameScene, true);
     try app.start();
 
     var ui_renderer = try ui.OpenGlRenderer.init(zp.Window.getProcAddress);
