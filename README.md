@@ -9,6 +9,9 @@ cd zephyr
 git clone git@github.com:Zephyr-Engine/zephyr-runtime.git
 git clone git@github.com:Zephyr-Engine/zephyr-editor.git
 
+mkdir game
+
 cd zephyr-editor
-zig build run
+zig build run -- create ../game
+zig build run -- open ../game
 ```

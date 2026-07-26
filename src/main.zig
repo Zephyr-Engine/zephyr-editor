@@ -43,8 +43,7 @@ pub fn main(init: std.process.Init) !void {
     defer ui_renderer.deinit();
     std.log.info("OpenGL: {s}", .{ui.OpenGlRenderer.versionString()});
 
-    const font_bytes = try project.root_dir.readFileAlloc(init.io, ".zephyr/assets/fonts/Inter-Regular.ttf", init.gpa, .limited(2 * 1024 * 1024));
-    defer init.gpa.free(font_bytes);
+    const font_bytes = @embedFile("resources/fonts/Inter-Regular.ttf");
     var font_atlas = try ui.FontAtlas.init(
         init.gpa,
         font_bytes,

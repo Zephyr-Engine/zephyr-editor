@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
 
-    const cook = zp.addProjectCookStep(b, zimp_dep, b.path("."));
+    const cook = zp.addProjectCookStep(b, zimp_dep, b.path("../zephyr-sandbox-game/"));
     const cook_step = b.step("cook", "Cook assets with zimp");
     cook_step.dependOn(&cook.step);
 
