@@ -1,9 +1,10 @@
+const builtin = @import("builtin");
 const std = @import("std");
 
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
-const cli = @import("cli/root.zig");
 const scene_input = @import("ui/scene_input.zig");
 const zp = @import("zephyr_runtime");
+const cli = @import("cli/root.zig");
 const Game = @import("game.zig");
 const ui = @import("zGUI");
 
@@ -24,6 +25,9 @@ pub fn main(init: std.process.Init) !void {
 
     var project = try zp.openProject(init.gpa, init.io, .{ .root_path = project_root });
     defer project.deinit(init.gpa, init.io);
+
+    const watch_handle = try project.watchAssets(init.gpa, init.io);
+    defer project.stopWatchingAssets(watch_handle);
 
     const App = zp.Application(Game);
     const app = App.init(init.gpa, init.io, .{

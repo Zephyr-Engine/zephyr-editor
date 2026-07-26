@@ -16,15 +16,6 @@ pub fn build(b: *std.Build) void {
     });
     const zgui_mod = zgui_dep.module("zGUI");
 
-    const zimp_dep = runtime_dep.builder.dependency("zimp", .{
-        .target = target,
-        .optimize = .ReleaseFast,
-    });
-
-    const cook = zp.addProjectCookStep(b, zimp_dep, b.path("../zephyr-sandbox-game/"));
-    const cook_step = b.step("cook", "Cook assets with zimp");
-    cook_step.dependOn(&cook.step);
-
     const exe = b.addExecutable(.{
         .name = "zephyr_sandbox",
         .root_module = b.createModule(.{
@@ -46,7 +37,6 @@ pub fn build(b: *std.Build) void {
 
     run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());
-    run_cmd.step.dependOn(&cook.step);
 
     if (b.args) |args| {
         run_cmd.addArgs(args);
