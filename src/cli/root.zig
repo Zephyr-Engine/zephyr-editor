@@ -57,7 +57,6 @@ pub fn createProject(
         .project_id = .v4(random_source.interface()),
         .name = project_name,
     };
-    errdefer manifest.deinit(allocator);
 
     try root_dir.createDirPath(io, manifest.generated_dir);
     try root_dir.createDirPath(io, manifest.assets_dir);
