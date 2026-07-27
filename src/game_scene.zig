@@ -21,8 +21,8 @@ pub const GameScene = struct {
             16.0 / 9.0,
         );
 
-        self.mesh = try ctx.assets.register(Mesh, "monkey.zmesh");
-        self.material = try ctx.assets.register(Material, "monkey.zamat");
+        self.mesh = try ctx.assets.register(Mesh, "meshes/monkey.zmesh");
+        self.material = try ctx.assets.register(Material, "materials/monkey.zamat");
 
         gl.glEnable(gl.GL_DEPTH_TEST);
     }
