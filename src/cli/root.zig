@@ -15,15 +15,21 @@ pub fn parse(args: []const []const u8) !Options {
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
         const arg = args[i];
-        if (std.mem.eql(u8, arg, "--project")) {
+        if (std.mem.eql(u8, arg, "create")) {
             i += 1;
-            if (i >= args.len) return error.MissingProjectPath;
+            if (i >= args.len) {
+                return error.MissingProjectPath;
+            }
+
             options.root_path = args[i];
             options.create_project = true;
-        } else if (std.mem.startsWith(u8, arg, "--project=")) {
-            options.root_path = arg["--project=".len..];
-            if (options.root_path.len == 0) return error.MissingProjectPath;
-            options.create_project = true;
+        } else if (std.mem.eql(u8, arg, "open")) {
+            i += 1;
+            if (i >= args.len) {
+                return error.MissingProjectPath;
+            }
+
+            options.root_path = args[i];
         } else {
             return error.UnknownArgument;
         }
