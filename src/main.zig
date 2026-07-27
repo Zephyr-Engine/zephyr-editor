@@ -5,18 +5,52 @@ const ui = @import("zGUI");
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
 const GameScene = @import("game_scene.zig").GameScene;
 const scene_input = @import("ui/scene_input.zig");
+const cli = @import("cli/root.zig");
 
 pub const std_options = zp.recommended_std_options;
 
 pub fn main(init: std.process.Init) !void {
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const options = cli.parse(args) catch |err| {
+        std.log.err("Invalid editor arguments: {}", .{err});
+        return;
+    };
+
+    const project_root = try cli.absoluteProjectRoot(
+        init.gpa,
+        init.io,
+        options.root_path,
+    );
+    defer init.gpa.free(project_root);
+
+    if (options.create_project) {
+        try cli.createProject(
+            init.gpa,
+            init.io,
+            project_root,
+            options.project_name,
+        );
+        return;
+    }
+
+    var project = try zp.openProject(init.gpa, init.io, .{
+        .root_path = project_root,
+    });
+    defer project.deinit(init.gpa, init.io);
+
+    const watch_handle = try project.watchAssets(init.gpa, init.io);
+    defer project.stopWatchingAssets(watch_handle);
+
+    watch_handle.waitForInitialCook() catch |err| {
+        std.log.err("Iniitial asset cook failed: {}", .{err});
+        return;
+    };
+
     const app = zp.Application.init(init.gpa, init.io, .{
         .title = "Zephyr Engine",
         .width = null,
         .height = null,
-    }, .{
-        .cooked_root = "src/output",
-        .source_root = "src/assets",
-    }) catch |err| {
+    }, &project) catch |err| {
         std.log.err("Application init failed: {}", .{err});
         return;
     };
