@@ -29,6 +29,11 @@ pub fn main(init: std.process.Init) !void {
     const watch_handle = try project.watchAssets(init.gpa, init.io);
     defer project.stopWatchingAssets(watch_handle);
 
+    watch_handle.waitForInitialCook() catch |err| {
+        std.log.err("Failed to cook initial assets: {}", .{err});
+        return;
+    };
+
     const App = zp.Application(Game);
     const app = App.init(init.gpa, init.io, .{
         .width = null,
