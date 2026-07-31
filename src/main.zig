@@ -34,7 +34,7 @@ pub fn main(init: std.process.Init) !void {
         return;
     };
 
-    const App = zp.Application(Game);
+    const App = zp.Application(Game.definition);
     const app = App.init(init.gpa, init.io, .{
         .width = null,
         .height = null,

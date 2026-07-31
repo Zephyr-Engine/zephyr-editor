@@ -4,15 +4,16 @@ const editor_components = @import("editor_components.zig");
 const game_components = @import("game_components.zig");
 const zp = @import("zephyr_runtime");
 
-pub const components = &.{
-    editor_components.FlyCameraController,
-    game_components.KeyboardMovementComponent,
-};
-
-/// Game-owned system ordering. The runtime runs this schedule every frame.
-pub const update_schedule = zp.Schedule.Spec{
-    .update = &.{
-        game_systems.keyboardMovementSystem,
-        editor_camera.updateActiveSystem,
+/// Editor-owned components and system ordering run by the runtime each frame.
+pub const definition = zp.Game{
+    .components = &.{
+        editor_components.FlyCameraController,
+        game_components.KeyboardMovementComponent,
+    },
+    .update_schedule = .{
+        .update = &.{
+            game_systems.keyboardMovementSystem,
+            editor_camera.updateActiveSystem,
+        },
     },
 };
