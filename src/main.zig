@@ -43,7 +43,7 @@ pub fn main(init: std.process.Init) !void {
         std.log.err("Application init failed: {}", .{err});
         return;
     };
-    defer app.deinit() catch |err| std.log.err("Application deinit failed: {}", .{err});
+    defer app.deinit();
     app.setDebugStatsEnabled(true);
 
     try app.start();
@@ -82,7 +82,7 @@ pub fn main(init: std.process.Init) !void {
         const ui_frame = try ui_backend.beginFrame(.{
             .window_size = ui.zephyr_runtime.toUiSize(app.window.getWindowSize()),
             .framebuffer_size = ui.zephyr_runtime.toPixelSize(app.window.getFramebufferSize()),
-            .dt = app.time.delta_time,
+            .dt = app.deltaTime(),
         }, runtime_events);
 
         try ui_state.beginFrame(ui_frame.toBeginFrame());
@@ -100,8 +100,8 @@ pub fn main(init: std.process.Init) !void {
         try viewport.resize(render_size.width, render_size.height);
 
         const ui_owns_mouse = dock_result.cursor != .arrow or editor.dock.drag != null;
-        try scene_input.processSceneEvents(app, runtime_events, viewport_rect, ui_state.input.mouse_pos, &scene_capture, ui_owns_mouse);
-        try app.pumpAssets();
+        scene_input.processSceneEvents(app.input(), runtime_events, viewport_rect, ui_state.input.mouse_pos, &scene_capture, ui_owns_mouse);
+        try app.update();
         try app.renderScene(&viewport);
 
         try ui_renderer.syncFontAtlas(&font_atlas);
