@@ -1,13 +1,13 @@
 const std = @import("std");
 const game_components = @import("game_components.zig");
-const game_types = @import("game_types.zig");
 const zp = @import("zephyr_runtime");
 
 const KeyboardMovementComponent = game_components.KeyboardMovementComponent;
 const TransformComponent = zp.components.TransformComponent;
 const Vec3 = zp.Vec3;
 
-pub fn keyboardMovementSystem(world: *game_types.Ecs.World, _: *game_types.Ecs.CommandBuffer) !void {
+pub fn keyboardMovementSystem(world: *zp.World, commands: *zp.CommandBuffer) !void {
+    std.debug.assert(commands.world == world);
     const input = world.getResource(zp.Input);
     const direction = keyboardDirection(input);
     if (direction.x == 0 and direction.z == 0) {

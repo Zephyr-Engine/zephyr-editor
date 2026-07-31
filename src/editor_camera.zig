@@ -1,19 +1,19 @@
 const std = @import("std");
 
 const editor_components = @import("editor_components.zig");
-const game_types = @import("game_types.zig");
 const zp = @import("zephyr_runtime");
 
 pub const max_pitch: f32 = std.math.pi / 2.0 - 0.02;
 
-pub fn updateActive(world: *game_types.Ecs.World, input: *const zp.Input) void {
+pub fn updateActive(world: *zp.World, input: *const zp.Input) void {
     const entity = zp.activeCamera(world) orelse return;
     const transform = world.getComponent(entity, zp.components.TransformComponent) orelse return;
     const controller = world.getComponent(entity, editor_components.FlyCameraController) orelse return;
     update(transform, controller, input);
 }
 
-pub fn updateActiveSystem(world: *game_types.Ecs.World, _: *game_types.Ecs.CommandBuffer) !void {
+pub fn updateActiveSystem(world: *zp.World, commands: *zp.CommandBuffer) !void {
+    std.debug.assert(commands.world == world);
     updateActive(world, world.getResource(zp.Input));
 }
 
