@@ -24,7 +24,7 @@ pub fn keyboardMovementSystem(world: *zp.World, commands: *zp.CommandBuffer) !vo
         const transform = entity.write(TransformComponent);
         const controller = entity.read(KeyboardMovementComponent);
 
-        const speed = controller.speed * if (input.isKeyHeld(.LeftShift))
+        const speed = controller.speed * if (input.isKeyDown(.LeftShift))
             controller.sprint_multiplier
         else
             1.0;
@@ -40,10 +40,10 @@ pub fn keyboardMovementSystem(world: *zp.World, commands: *zp.CommandBuffer) !vo
 fn keyboardDirection(input: *const zp.Input) Vec3 {
     var direction = Vec3.zero;
 
-    if (input.isKeyHeld(.W) or input.isKeyHeld(.Up)) direction.z -= 1;
-    if (input.isKeyHeld(.S) or input.isKeyHeld(.Down)) direction.z += 1;
-    if (input.isKeyHeld(.A) or input.isKeyHeld(.Left)) direction.x -= 1;
-    if (input.isKeyHeld(.D) or input.isKeyHeld(.Right)) direction.x += 1;
+    if (input.isKeyDown(.W) or input.isKeyDown(.Up)) direction.z -= 1;
+    if (input.isKeyDown(.S) or input.isKeyDown(.Down)) direction.z += 1;
+    if (input.isKeyDown(.A) or input.isKeyDown(.Left)) direction.x -= 1;
+    if (input.isKeyDown(.D) or input.isKeyDown(.Right)) direction.x += 1;
 
     return direction;
 }

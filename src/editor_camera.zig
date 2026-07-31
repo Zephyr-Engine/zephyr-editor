@@ -24,14 +24,14 @@ pub fn update(
 ) void {
     const delta = input.mouse_delta;
 
-    if (input.isButtonHeld(.Right)) {
+    if (input.isMouseButtonDown(.Right)) {
         controller.yaw -= delta.x * controller.look_sensitivity;
         controller.pitch -= delta.y * controller.look_sensitivity;
         controller.pitch = std.math.clamp(controller.pitch, -max_pitch, max_pitch);
         transform.rotation = orientation(controller.yaw, controller.pitch);
     }
 
-    if (input.isButtonHeld(.Left)) {
+    if (input.isMouseButtonDown(.Left)) {
         transform.position = transform.position.sub(
             transform.right().scale(delta.x * controller.pan_sensitivity),
         );

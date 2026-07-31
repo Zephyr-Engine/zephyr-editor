@@ -28,7 +28,8 @@ pub const SceneInputCapture = struct {
                 break :released was_active or scene_target;
             },
             .MouseScroll => self.active or scene_target,
-            .KeyPressed, .KeyReleased, .KeyRepeated => self.active or scene_target,
+            .KeyReleased => true,
+            .KeyPressed, .KeyRepeated => self.active or scene_target,
             .WindowResize, .FramebufferResize, .ContentScaleChange, .WindowClose => true,
             .CharInput => false,
         };
