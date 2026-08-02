@@ -1,7 +1,7 @@
 const scene = @import("zephyr_runtime").scene_schema;
 
 pub const FlyCameraController = struct {
-    look_sensitivity: f32 = 0.02,
+    look_sensitivity: f32 = 0.004,
     pan_sensitivity: f32 = 0.035,
     zoom_speed: f32 = 1.0,
     pitch: f32 = 0,
