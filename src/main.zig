@@ -69,8 +69,8 @@ pub fn main(init: std.process.Init) !void {
     var editor = try EditorUi.init(init.gpa, &ui_state);
     defer editor.deinit();
 
-    var viewport = try zp.Framebuffer.init(1, 1);
-    defer viewport.deinit();
+    var viewport = try app.runtime.renderer.device.createFramebuffer(1, 1);
+    defer app.runtime.renderer.device.destroyFramebuffer(&viewport);
 
     var ui_backend = ui.zephyr_runtime.Backend.init(init.gpa);
     defer ui_backend.deinit();
@@ -89,7 +89,7 @@ pub fn main(init: std.process.Init) !void {
 
         const dock_result = try editor.dockSpace(&ui_state, ui_frame.window_size);
         ui.zephyr_runtime.setCursor(app.window, ui_state.requestedCursor());
-        editor.setViewportTexture(&ui_state, viewport.textureId());
+        editor.setViewportTexture(&ui_state, app.runtime.renderer.device.framebufferTextureId(&viewport));
         editor.setDebugStats(&ui_state, app.debugStats());
 
         ui_state.setTextRasterScale(ui_frame.text_raster_scale);
@@ -97,7 +97,10 @@ pub fn main(init: std.process.Init) !void {
 
         const viewport_rect = editor.viewportRect();
         const render_size = ui.zephyr_runtime.renderSizeForRect(viewport_rect, ui_frame.text_raster_scale);
-        try viewport.resize(render_size.width, render_size.height);
+        try app.runtime.renderer.device.resizeFramebuffer(&viewport, .{
+            .width = render_size.width,
+            .height = render_size.height,
+        });
 
         const ui_owns_mouse = dock_result.cursor != .arrow or editor.dock.drag != null;
         scene_input.processSceneEvents(app.input(), runtime_events, viewport_rect, ui_state.input.mouse_pos, &scene_capture, ui_owns_mouse);
