@@ -4,7 +4,11 @@ const zp = @import("zephyr_runtime");
 pub const SceneInputCapture = struct {
     active: bool = false,
 
-    pub fn accepts(self: *SceneInputCapture, event: anytype, viewport_rect: ui.Rect, mouse_pos: ui.Vec2, ui_owns_mouse: bool) bool {
+    pub fn reset(self: *SceneInputCapture) void {
+        self.active = false;
+    }
+
+    pub fn accepts(self: *SceneInputCapture, event: zp.ZEvent, viewport_rect: ui.Rect, mouse_pos: ui.Vec2, ui_owns_mouse: bool) bool {
         const scene_target = viewport_rect.contains(mouse_pos) and !ui_owns_mouse;
         return switch (event) {
             .MouseMove => true,
