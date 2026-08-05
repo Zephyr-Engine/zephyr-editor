@@ -2,6 +2,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
+const editor_icons = @import("editor_icons.zig");
 const scene_input = @import("ui/scene_input.zig");
 const zp = @import("zephyr_runtime");
 const cli = @import("cli/root.zig");
@@ -62,15 +63,23 @@ pub fn main(init: std.process.Init) !void {
     defer font_atlas.deinit();
     try ui_renderer.syncFontAtlas(&font_atlas);
 
+    var icons = try editor_icons.Textures.init(&ui_renderer, init.gpa);
+    defer icons.deinit(&ui_renderer);
+
     var ui_state = try ui.Ui.init(init.gpa);
     defer ui_state.deinit();
     ui_state.setFontAtlas(&font_atlas);
 
-    var editor = try EditorUi.init(init.gpa, &ui_state);
+    var editor = try EditorUi.init(init.gpa, &ui_state, .{
+        .play = icons.play,
+        .pause = icons.pause,
+        .stop = icons.stop,
+    });
     defer editor.deinit();
 
     var viewport = try app.runtime.renderer.device.createFramebuffer(1, 1);
     defer app.runtime.renderer.device.destroyFramebuffer(&viewport);
+    const viewport_texture = app.runtime.renderer.device.framebufferColorView(&viewport);
 
     var ui_backend = ui.zephyr_runtime.Backend.init(init.gpa);
     defer ui_backend.deinit();
@@ -89,7 +98,7 @@ pub fn main(init: std.process.Init) !void {
 
         const dock_result = try editor.dockSpace(&ui_state, ui_frame.window_size);
         ui.zephyr_runtime.setCursor(app.window, ui_state.requestedCursor());
-        editor.setViewportTexture(&ui_state, app.runtime.renderer.device.framebufferTextureId(&viewport));
+        editor.setViewportTexture(&ui_state, app.runtime.renderer.device.textureViewNativeId(viewport_texture));
         editor.setDebugStats(&ui_state, app.debugStats());
 
         ui_state.setTextRasterScale(ui_frame.text_raster_scale);
@@ -102,7 +111,7 @@ pub fn main(init: std.process.Init) !void {
             .height = render_size.height,
         });
 
-        const ui_owns_mouse = dock_result.cursor != .arrow or editor.dock.drag != null;
+        const ui_owns_mouse = dock_result.cursor != .arrow or editor.dock.drag != null or editor.controlsOwnMouse(&ui_state);
         scene_input.processSceneEvents(app.input(), runtime_events, viewport_rect, ui_state.input.mouse_pos, &scene_capture, ui_owns_mouse);
         try app.update();
         try app.renderScene(&viewport);

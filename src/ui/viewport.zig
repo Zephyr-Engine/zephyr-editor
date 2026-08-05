@@ -5,11 +5,20 @@ const zp = @import("zephyr_runtime");
 pub const Nodes = struct {
     root: ui.NodeId,
     image: ui.NodeId,
+    play_button: ui.NodeId,
+    pause_button: ui.NodeId,
+    stop_button: ui.NodeId,
     stats_card: ui.NodeId,
     stats_label: ui.NodeId,
 };
 
-pub fn build(state: *ui.Ui, parent: ui.NodeId) !Nodes {
+pub const ControlTextures = struct {
+    play: u32,
+    pause: u32,
+    stop: u32,
+};
+
+pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: ControlTextures) !Nodes {
     const root = try ui.widgets.surface(state, parent, .{
         .width = .fill,
         .height = .fill,
@@ -30,6 +39,32 @@ pub fn build(state: *ui.Ui, parent: ui.NodeId) !Nodes {
         .uv1 = .{ .x = 1, .y = 0 },
         .interactive = true,
     });
+
+    const toolbar_row = try ui.widgets.row(state, root, .{
+        .width = .fill,
+        .height = .{ .px = 52 },
+        .padding = .{ .top = 9 },
+        .background = .transparent,
+    });
+    _ = try ui.widgets.spacer(state, toolbar_row);
+    const toolbar = try ui.widgets.row(state, toolbar_row, .{
+        .width = .{ .px = 98 },
+        .height = .{ .px = 36 },
+        .gap = 2,
+        .padding = .{ .left = 5, .right = 5, .top = 4, .bottom = 4 },
+        .background = .shell,
+        .border = .stroke_soft,
+        .border_width = 1,
+        .radius = .pill,
+    });
+    const toolbar_node = state.tree.get(toolbar).?;
+    toolbar_node.style.background = ui.Color.rgba(17, 18, 22, 232);
+    toolbar_node.style.border_color = ui.Color.rgba(255, 255, 255, 24);
+    _ = try ui.widgets.spacer(state, toolbar_row);
+
+    const play_button = try controlButton(state, toolbar, controls.play);
+    const pause_button = try controlButton(state, toolbar, controls.pause);
+    const stop_button = try controlButton(state, toolbar, controls.stop);
 
     const stats_row = try ui.widgets.row(state, root, .{
         .width = .fill,
@@ -60,9 +95,39 @@ pub fn build(state: *ui.Ui, parent: ui.NodeId) !Nodes {
     return .{
         .root = root,
         .image = image,
+        .play_button = play_button,
+        .pause_button = pause_button,
+        .stop_button = stop_button,
         .stats_card = stats_card,
         .stats_label = stats_label,
     };
+}
+
+pub fn controlsOwnMouse(state: *const ui.Ui, nodes: Nodes) bool {
+    return isControl(nodes, state.input.hovered) or isControl(nodes, state.input.active);
+}
+
+fn isControl(nodes: Nodes, id: ui.NodeId) bool {
+    return id == nodes.play_button or id == nodes.pause_button or id == nodes.stop_button;
+}
+
+fn controlButton(state: *ui.Ui, parent: ui.NodeId, texture_id: u32) !ui.NodeId {
+    const button = try ui.widgets.iconButton(state, parent, .{
+        .texture_id = texture_id,
+        .style = state.theme.style(.{
+            .width = .{ .px = 28 },
+            .height = .{ .px = 28 },
+            .padding = .{ .left = 4, .right = 4, .top = 4, .bottom = 4 },
+            .background = .transparent,
+            .border = .transparent,
+            .radius = .control,
+        }),
+        .tint = ui.Color.rgba(194, 198, 207, 255),
+    });
+    const node = state.tree.get(button).?;
+    node.style.hover_background = ui.Color.rgba(255, 255, 255, 18);
+    node.style.pressed_background = ui.Color.rgba(255, 255, 255, 30);
+    return button;
 }
 
 pub fn setTexture(state: *ui.Ui, image: ui.NodeId, texture_id: u32) void {
