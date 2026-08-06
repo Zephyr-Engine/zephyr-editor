@@ -3,9 +3,9 @@ const ui = @import("zGUI");
 const zp = @import("zephyr_runtime");
 
 pub const Textures = struct {
-    play: u32 = 0,
-    pause: u32 = 0,
-    stop: u32 = 0,
+    play: ui.TextureHandle = .none,
+    pause: ui.TextureHandle = .none,
+    stop: ui.TextureHandle = .none,
 
     pub fn init(renderer: *ui.OpenGlRenderer, allocator: std.mem.Allocator) !Textures {
         var textures: Textures = .{};
@@ -29,7 +29,7 @@ fn load(
     allocator: std.mem.Allocator,
     filename: []const u8,
     encoded: []const u8,
-) !u32 {
+) !ui.TextureHandle {
     var decoded = try zp.RawTexture.init(filename, @constCast(encoded));
     defer decoded.deinit(allocator);
 

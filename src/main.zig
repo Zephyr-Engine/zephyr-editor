@@ -1,9 +1,11 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
+const ui_runtime = @import("ui/zgui_runtime_backend.zig");
+const ViewportTarget = @import("viewport_target.zig");
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
-const editor_icons = @import("editor_icons.zig");
 const scene_input = @import("ui/scene_input.zig");
+const editor_icons = @import("editor_icons.zig");
 const viewport_mod = @import("ui/viewport.zig");
 const log = @import("utilities/log.zig");
 const zp = @import("zephyr_runtime");
@@ -51,7 +53,7 @@ pub fn main(init: std.process.Init) !void {
 
     try app.start();
 
-    var ui_renderer = try ui.OpenGlRenderer.init(zp.Window.getProcAddress);
+    var ui_renderer = try ui.OpenGlRenderer.init(init.gpa, zp.Window.getProcAddress);
     defer ui_renderer.deinit();
     log.info("OpenGL: {s}", .{ui.OpenGlRenderer.versionString()});
 
@@ -82,11 +84,12 @@ pub fn main(init: std.process.Init) !void {
     var editor = try EditorUi.init(init.gpa, &ui_state, &control_textures);
     defer editor.deinit();
 
-    var viewport = try app.runtime.renderer.device.createFramebuffer(1, 1);
-    defer app.runtime.renderer.device.destroyFramebuffer(&viewport);
-    const viewport_texture = app.runtime.renderer.device.framebufferColorView(&viewport);
+    var viewport = try ViewportTarget.init(&app.runtime.renderer.device);
+    defer viewport.deinit();
+    var viewport_texture = try ui_renderer.registerExternalTexture(viewport.nativeTextureId());
+    defer ui_renderer.destroyTexture(&viewport_texture);
 
-    var ui_backend = ui.zephyr_runtime.Backend.init(init.gpa);
+    var ui_backend = ui_runtime.Backend.init(init.gpa);
     defer ui_backend.deinit();
 
     var scene_capture: scene_input.SceneInputCapture = .{};
@@ -94,36 +97,47 @@ pub fn main(init: std.process.Init) !void {
     while (app.window.shouldCloseWindow()) {
         const runtime_events = app.beginFrame();
         const ui_frame = try ui_backend.beginFrame(.{
-            .window_size = ui.zephyr_runtime.toUiSize(app.window.getWindowSize()),
-            .framebuffer_size = ui.zephyr_runtime.toPixelSize(app.window.getFramebufferSize()),
+            .window_size = ui_runtime.toUiSize(app.window.getWindowSize()),
+            .framebuffer_size = ui_runtime.toPixelSize(app.window.getFramebufferSize()),
             .dt = app.deltaTime(),
         }, runtime_events);
 
         try ui_state.beginFrame(ui_frame.toBeginFrame());
 
-        const dock_result = try editor.dockSpace(&ui_state, ui_frame.window_size);
+        _ = try editor.dockSpace(&ui_state, ui_frame.window_size);
         editor.processControls(&ui_state);
-        ui.zephyr_runtime.setCursor(app.window, ui_state.requestedCursor());
-        editor.setViewportTexture(&ui_state, app.runtime.renderer.device.textureViewNativeId(viewport_texture));
-        editor.setDebugStats(&ui_state, app.debugStats());
+        ui_runtime.setCursor(app.window, ui_state.requestedCursor());
+        try editor.setViewportTexture(&ui_state, viewport_texture);
+        try editor.setDebugStats(&ui_state, app.debugStats(), app.deltaTime());
 
         ui_state.setTextRasterScale(ui_frame.text_raster_scale);
         try ui_state.endFrame();
 
         const viewport_rect = editor.viewportRect();
-        const render_size = ui.zephyr_runtime.renderSizeForRect(viewport_rect, ui_frame.text_raster_scale);
-        try app.runtime.renderer.device.resizeFramebuffer(&viewport, .{
-            .width = render_size.width,
-            .height = render_size.height,
-        });
+        _ = try viewport.ensureSize(viewport_rect, ui_frame.text_raster_scale);
 
-        const ui_owns_mouse = dock_result.cursor != .arrow or editor.dock.drag != null or editor.controlsOwnMouse(&ui_state);
-        scene_input.processSceneEvents(app.input(), runtime_events, viewport_rect, ui_state.input.mouse_pos, &scene_capture, ui_owns_mouse);
+        const ui_owns_mouse = ui_state.inputCapture().wants_mouse or editor.dock.isInteracting() or editor.controlsOwnMouse(&ui_state);
+        scene_input.processSceneEvents(
+            app.input(),
+            runtime_events,
+            viewport_rect,
+            ui_state.mousePosition(),
+            &scene_capture,
+            ui_owns_mouse,
+        );
         try app.update();
-        try app.renderScene(&viewport);
+
+        if (viewport.renderTarget()) |target| {
+            try app.renderScene(target);
+        }
 
         try ui_renderer.syncFontAtlas(&font_atlas);
-        try ui_renderer.beginFrameLogical(ui_frame.framebuffer_size.width, ui_frame.framebuffer_size.height, ui_frame.window_size.x, ui_frame.window_size.y);
+        try ui_renderer.beginFrameLogical(
+            ui_frame.framebuffer_size.width,
+            ui_frame.framebuffer_size.height,
+            ui_frame.window_size.x,
+            ui_frame.window_size.y,
+        );
         try ui_renderer.render(ui_state.drawData());
         try ui_renderer.endFrame();
         app.present();
