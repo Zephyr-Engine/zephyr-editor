@@ -15,8 +15,9 @@ pub fn parse(args: []const []const u8) !Options {
     var options: Options = .{};
 
     if (args.len == 1) {
-        return options;
+        return error.MissingProjectPath;
     }
+
     if (args.len == 2) {
         if (std.mem.eql(u8, args[1], "create") or std.mem.eql(u8, args[1], "open")) {
             return error.MissingProjectPath;

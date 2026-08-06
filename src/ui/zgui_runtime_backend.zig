@@ -8,16 +8,17 @@ pub const PixelSize = struct {
 };
 
 pub const BeginFrameInput = struct {
-    window_size: ui.Vec2,
     framebuffer_size: PixelSize,
+    font_atlas: *ui.FontAtlas,
+    window_size: ui.Vec2,
     dt: f32,
 };
 
 pub const Frame = struct {
     events: []const ui.PlatformEvent,
-    window_size: ui.Vec2,
     framebuffer_size: PixelSize,
     text_raster_scale: f32,
+    window_size: ui.Vec2,
     dt: f32,
 
     pub fn toBeginFrame(self: Frame) ui.BeginFrame {
@@ -29,74 +30,87 @@ pub const Frame = struct {
     }
 };
 
-pub const Backend = struct {
-    allocator: std.mem.Allocator,
-    events: std.ArrayList(ui.PlatformEvent) = .empty,
-    text_buffer: std.ArrayList(u8) = .empty,
+const Backend = @This();
 
-    pub fn init(allocator: std.mem.Allocator) Backend {
-        return .{ .allocator = allocator };
-    }
+allocator: std.mem.Allocator,
+events: std.ArrayList(ui.PlatformEvent) = .empty,
+text_buffer: std.ArrayList(u8) = .empty,
+renderer: *ui.OpenGlRenderer,
 
-    pub fn deinit(self: *Backend) void {
-        self.events.deinit(self.allocator);
-        self.text_buffer.deinit(self.allocator);
-        self.* = undefined;
-    }
+pub fn init(allocator: std.mem.Allocator, renderer: *ui.OpenGlRenderer) Backend {
+    return .{
+        .allocator = allocator,
+        .renderer = renderer,
+    };
+}
 
-    pub fn beginFrame(self: *Backend, input: BeginFrameInput, runtime_events: []const zp.ZEvent) !Frame {
-        return .{
-            .events = try self.translateEvents(runtime_events),
-            .window_size = input.window_size,
-            .framebuffer_size = input.framebuffer_size,
-            .text_raster_scale = framebufferScale(input.window_size, input.framebuffer_size),
-            .dt = input.dt,
-        };
-    }
+pub fn deinit(self: *Backend) void {
+    self.events.deinit(self.allocator);
+    self.text_buffer.deinit(self.allocator);
+    self.* = undefined;
+}
 
-    fn translateEvents(self: *Backend, runtime_events: []const zp.ZEvent) ![]const ui.PlatformEvent {
-        self.events.clearRetainingCapacity();
-        self.text_buffer.clearRetainingCapacity();
+pub fn beginFrame(self: *Backend, input: BeginFrameInput, runtime_events: []const zp.ZEvent) !Frame {
+    const frame = Frame{
+        .events = try self.translateEvents(runtime_events),
+        .window_size = input.window_size,
+        .framebuffer_size = input.framebuffer_size,
+        .text_raster_scale = framebufferScale(input.window_size, input.framebuffer_size),
+        .dt = input.dt,
+    };
+    try self.renderer.syncFontAtlas(input.font_atlas);
+    try self.renderer.beginFrameLogical(
+        frame.framebuffer_size.width,
+        frame.framebuffer_size.height,
+        frame.window_size.x,
+        frame.window_size.y,
+    );
 
-        var text_capacity: usize = 0;
-        for (runtime_events) |event| switch (event) {
-            .CharInput => text_capacity += 4,
-            else => {},
-        };
-        try self.text_buffer.ensureTotalCapacity(self.allocator, text_capacity);
+    return frame;
+}
 
-        for (runtime_events) |event| {
-            if (try self.toPlatformEvent(event)) |platform_event| {
-                try self.events.append(self.allocator, platform_event);
-            }
+fn translateEvents(self: *Backend, runtime_events: []const zp.ZEvent) ![]const ui.PlatformEvent {
+    self.events.clearRetainingCapacity();
+    self.text_buffer.clearRetainingCapacity();
+
+    var text_capacity: usize = 0;
+    for (runtime_events) |event| switch (event) {
+        .CharInput => text_capacity += 4,
+        else => {},
+    };
+    try self.text_buffer.ensureTotalCapacity(self.allocator, text_capacity);
+
+    for (runtime_events) |event| {
+        if (try self.toPlatformEvent(event)) |platform_event| {
+            try self.events.append(self.allocator, platform_event);
         }
-        return self.events.items;
     }
+    return self.events.items;
+}
 
-    fn toPlatformEvent(self: *Backend, event: zp.ZEvent) !?ui.PlatformEvent {
-        return switch (event) {
-            .MouseMove => |pos| .{ .mouse_move = .{ .x = pos.x, .y = pos.y } },
-            .MousePressed => |button| .{ .mouse_down = mapMouseButton(button) orelse return null },
-            .MouseReleased => |button| .{ .mouse_up = mapMouseButton(button) orelse return null },
-            .MouseScroll => |scroll| .{ .scroll = .{ .x = scroll.x, .y = scroll.y } },
-            .KeyPressed => |key| .{ .key_down = mapKey(key) },
-            .KeyRepeated => |key| .{ .key_down = mapKey(key) },
-            .KeyReleased => |key| .{ .key_up = mapKey(key) },
-            .CharInput => |codepoint| try self.textInputEvent(codepoint),
-            .WindowResize => |resize| .{ .window_resize = .{ .x = @floatFromInt(resize.width), .y = @floatFromInt(resize.height) } },
-            .WindowClose => .window_close,
-            .FramebufferResize, .ContentScaleChange => null,
-        };
-    }
+fn toPlatformEvent(self: *Backend, event: zp.ZEvent) !?ui.PlatformEvent {
+    return switch (event) {
+        .MouseMove => |pos| .{ .mouse_move = .{ .x = pos.x, .y = pos.y } },
+        .MousePressed => |button| .{ .mouse_down = mapMouseButton(button) orelse return null },
+        .MouseReleased => |button| .{ .mouse_up = mapMouseButton(button) orelse return null },
+        .MouseScroll => |scroll| .{ .scroll = .{ .x = scroll.x, .y = scroll.y } },
+        .KeyPressed => |key| .{ .key_down = mapKey(key) },
+        .KeyRepeated => |key| .{ .key_down = mapKey(key) },
+        .KeyReleased => |key| .{ .key_up = mapKey(key) },
+        .CharInput => |codepoint| try self.textInputEvent(codepoint),
+        .WindowResize => |resize| .{ .window_resize = .{ .x = @floatFromInt(resize.width), .y = @floatFromInt(resize.height) } },
+        .WindowClose => .window_close,
+        .FramebufferResize, .ContentScaleChange => null,
+    };
+}
 
-    fn textInputEvent(self: *Backend, codepoint: u32) !?ui.PlatformEvent {
-        var buf: [4]u8 = undefined;
-        const len = std.unicode.utf8Encode(@intCast(codepoint), &buf) catch return null;
-        const start = self.text_buffer.items.len;
-        try self.text_buffer.appendSlice(self.allocator, buf[0..len]);
-        return .{ .text_input = self.text_buffer.items[start .. start + len] };
-    }
-};
+fn textInputEvent(self: *Backend, codepoint: u32) !?ui.PlatformEvent {
+    var buf: [4]u8 = undefined;
+    const len = std.unicode.utf8Encode(@intCast(codepoint), &buf) catch return null;
+    const start = self.text_buffer.items.len;
+    try self.text_buffer.appendSlice(self.allocator, buf[0..len]);
+    return .{ .text_input = self.text_buffer.items[start .. start + len] };
+}
 
 pub fn setCursor(window: *zp.Window, cursor: ui.CursorKind) void {
     switch (cursor) {

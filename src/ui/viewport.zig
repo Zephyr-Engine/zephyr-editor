@@ -2,45 +2,50 @@ const zp = @import("zephyr_runtime");
 const std = @import("std");
 const ui = @import("zGUI");
 
-const PlayState = @import("../state/play_state.zig").PlayState;
+const Command = @import("../editor/command.zig").Command;
 
-pub const stats_refresh_interval_seconds: f32 = 0.10;
-
-pub const StatsRefreshClock = struct {
-    until_next: f32 = 0,
-
-    pub fn shouldRefresh(self: *StatsRefreshClock, dt: f32) bool {
-        const elapsed = if (std.math.isFinite(dt) and dt > 0) dt else 0;
-        self.until_next -= elapsed;
-        if (self.until_next > 0.000001) return false;
-        self.until_next = stats_refresh_interval_seconds;
-        return true;
-    }
-
-    pub fn reset(self: *StatsRefreshClock) void {
-        self.until_next = 0;
-    }
-};
+const toolbar_commands = [_]Command{ .play, .pause, .stop };
 
 pub const Nodes = struct {
     root: ui.NodeId,
     image: ui.NodeId,
-    play_button: ui.NodeId,
-    pause_button: ui.NodeId,
-    stop_button: ui.NodeId,
+    control_buttons: [toolbar_commands.len]ui.NodeId,
     stats_card: ui.NodeId,
     stats_label: ui.NodeId,
 };
 
-pub const ControlTextures = struct {
+/// Image resources for the toolbar. The toolbar itself emits commands and does
+/// not own editor state.
+pub const ControlIcons = struct {
     play: ui.TextureHandle,
     pause: ui.TextureHandle,
     stop: ui.TextureHandle,
 
-    state: PlayState,
+    fn forCommand(self: ControlIcons, command: Command) ui.TextureHandle {
+        return switch (command) {
+            .play => self.play,
+            .pause => self.pause,
+            .stop => self.stop,
+        };
+    }
 };
 
-pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: *ControlTextures) !Nodes {
+pub const Commands = struct {
+    values: [toolbar_commands.len]Command = undefined,
+    len: usize = 0,
+
+    fn append(self: *Commands, command: Command) void {
+        std.debug.assert(self.len < self.values.len);
+        self.values[self.len] = command;
+        self.len += 1;
+    }
+
+    pub fn slice(self: *const Commands) []const Command {
+        return self.values[0..self.len];
+    }
+};
+
+pub fn build(state: *ui.Ui, parent: ui.NodeId, icons: ControlIcons) !Nodes {
     const root = try ui.widgets.surface(state, parent, .{
         .width = .fill,
         .height = .fill,
@@ -88,9 +93,10 @@ pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: *ControlTextures) !Node
     try state.setStyle(toolbar, toolbar_style);
 
     _ = try ui.widgets.spacer(state, toolbar_row);
-    const play_button = try controlButton(state, toolbar, controls.play);
-    const pause_button = try controlButton(state, toolbar, controls.pause);
-    const stop_button = try controlButton(state, toolbar, controls.stop);
+    var control_buttons: [toolbar_commands.len]ui.NodeId = undefined;
+    for (toolbar_commands, 0..) |command, index| {
+        control_buttons[index] = try controlButton(state, toolbar, icons.forCommand(command));
+    }
 
     const stats_row = try ui.widgets.row(state, root, .{
         .width = .fill,
@@ -125,32 +131,28 @@ pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: *ControlTextures) !Node
     return .{
         .root = root,
         .image = image,
-        .play_button = play_button,
-        .pause_button = pause_button,
-        .stop_button = stop_button,
+        .control_buttons = control_buttons,
         .stats_card = stats_card,
         .stats_label = stats_label,
     };
 }
 
 pub fn controlsOwnMouse(state: *const ui.Ui, nodes: Nodes) bool {
-    return controlInteracting(state, nodes.play_button) or
-        controlInteracting(state, nodes.pause_button) or
-        controlInteracting(state, nodes.stop_button);
+    for (nodes.control_buttons) |button| {
+        if (controlInteracting(state, button)) return true;
+    }
+    return false;
 }
 
-pub fn processControls(state: *const ui.Ui, nodes: Nodes, controls: *ControlTextures) void {
-    if (state.clicked(nodes.play_button)) {
-        controls.state = controls.state.transition(.Play);
+/// Collects every command requested by this frame's toolbar interaction.
+/// Add a button by declaring its command and icon, then adding it to
+/// `toolbar_commands`; editor-state wiring is not needed here.
+pub fn commands(state: *const ui.Ui, nodes: Nodes) Commands {
+    var result: Commands = .{};
+    for (toolbar_commands, nodes.control_buttons) |command, button| {
+        if (state.clicked(button)) result.append(command);
     }
-
-    if (state.clicked(nodes.pause_button)) {
-        controls.state = controls.state.transition(.Pause);
-    }
-
-    if (state.clicked(nodes.stop_button)) {
-        controls.state = controls.state.transition(.Stop);
-    }
+    return result;
 }
 
 fn controlInteracting(state: *const ui.Ui, id: ui.NodeId) bool {
@@ -215,14 +217,10 @@ pub fn setStats(state: *ui.Ui, nodes: Nodes, buffer: []u8, stats: ?zp.DebugStats
     try state.setText(nodes.stats_label, text);
 }
 
-test "debug stats refresh at a readable cadence" {
-    var clock: StatsRefreshClock = .{};
+test "toolbar command buffers preserve action order" {
+    var buffer: Commands = .{};
+    buffer.append(.play);
+    buffer.append(.stop);
 
-    try std.testing.expect(clock.shouldRefresh(1.0 / 60.0));
-    try std.testing.expect(!clock.shouldRefresh(0.04));
-    try std.testing.expect(!clock.shouldRefresh(0.04));
-    try std.testing.expect(clock.shouldRefresh(0.02));
-
-    clock.reset();
-    try std.testing.expect(clock.shouldRefresh(0));
+    try std.testing.expectEqualSlices(Command, &.{ .play, .stop }, buffer.slice());
 }

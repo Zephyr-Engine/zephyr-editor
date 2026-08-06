@@ -28,84 +28,78 @@ const EditorDockRefs = struct {
     viewport_window: ui.DockWindowId,
 };
 
-pub const EditorUi = struct {
-    dock: ui.DockSpace,
-    refs: EditorDockRefs,
-    nodes: EditorNodes,
-    controls: *viewport.ControlTextures,
-    stats_text: [128]u8 = undefined,
-    stats_refresh: viewport.StatsRefreshClock = .{},
-    stats_visible: bool = false,
+const EditorUi = @This();
 
-    pub fn init(allocator: std.mem.Allocator, state: *ui.Ui, control_textures: *viewport.ControlTextures) !EditorUi {
-        state.setTheme(ui.theme.zephyr_dark);
+dock: ui.DockSpace,
+refs: EditorDockRefs,
+nodes: EditorNodes,
+stats_text: [128]u8 = undefined,
+stats_visible: bool = false,
 
-        var dock = try ui.DockSpace.init(allocator);
-        errdefer dock.deinit();
+pub fn init(allocator: std.mem.Allocator, state: *ui.Ui, control_icons: viewport.ControlIcons) !EditorUi {
+    state.setTheme(ui.theme.zephyr_dark);
 
-        const nodes = try createEditorTree(state, control_textures);
-        const refs = try createDockTree(&dock, nodes);
+    var dock = try ui.DockSpace.init(allocator);
+    errdefer dock.deinit();
 
-        return .{
-            .dock = dock,
-            .refs = refs,
-            .nodes = nodes,
-            .controls = control_textures,
-        };
+    const nodes = try createEditorTree(state, control_icons);
+    const refs = try createDockTree(&dock, nodes);
+
+    return .{
+        .dock = dock,
+        .refs = refs,
+        .nodes = nodes,
+    };
+}
+
+pub fn deinit(self: *EditorUi) void {
+    self.dock.deinit();
+}
+
+pub fn dockSpace(self: *EditorUi, state: *ui.Ui, window_size: ui.Vec2) !ui.DockSpaceResult {
+    const available_width = @max(1, window_size.x);
+    const available_height = @max(1, window_size.y);
+    return ui.widgets.dockSpace(state, self.nodes.dock_host, &self.dock, .{
+        .rect = .{
+            .x = 0,
+            .y = 0,
+            .w = available_width,
+            .h = available_height,
+        },
+        .handle_thickness = resize_handle_thickness,
+        .tab_height = 30,
+    });
+}
+
+pub fn setViewportTexture(self: *const EditorUi, state: *ui.Ui, texture: ui.TextureHandle) !void {
+    try viewport.setTexture(state, self.nodes.viewport_image, texture);
+}
+
+pub fn setDebugStats(self: *EditorUi, state: *ui.Ui, stats: ?zp.DebugStats) !void {
+    if (stats == null) {
+        if (!self.stats_visible) return;
+        self.stats_visible = false;
+        try viewport.setStats(state, self.nodes.viewport_stats, &self.stats_text, null);
+        return;
     }
 
-    pub fn deinit(self: *EditorUi) void {
-        self.dock.deinit();
+    if (!self.stats_visible) {
+        self.stats_visible = true;
     }
+    try viewport.setStats(state, self.nodes.viewport_stats, &self.stats_text, stats);
+}
 
-    pub fn dockSpace(self: *EditorUi, state: *ui.Ui, window_size: ui.Vec2) !ui.DockSpaceResult {
-        const available_width = @max(1, window_size.x);
-        const available_height = @max(1, window_size.y);
-        return ui.widgets.dockSpace(state, self.nodes.dock_host, &self.dock, .{
-            .rect = .{
-                .x = 0,
-                .y = 0,
-                .w = available_width,
-                .h = available_height,
-            },
-            .handle_thickness = resize_handle_thickness,
-            .tab_height = 30,
-        });
-    }
+pub fn viewportRect(self: *const EditorUi) ui.Rect {
+    return self.dock.windowContentRect(self.refs.viewport_window) orelse .{};
+}
 
-    pub fn setViewportTexture(self: *const EditorUi, state: *ui.Ui, texture: ui.TextureHandle) !void {
-        try viewport.setTexture(state, self.nodes.viewport_image, texture);
-    }
+pub fn controlsOwnMouse(self: *const EditorUi, state: *const ui.Ui) bool {
+    return viewport.controlsOwnMouse(state, self.nodes.viewport_stats);
+}
 
-    pub fn setDebugStats(self: *EditorUi, state: *ui.Ui, stats: ?zp.DebugStats, dt: f32) !void {
-        if (stats == null) {
-            self.stats_refresh.reset();
-            if (!self.stats_visible) return;
-            self.stats_visible = false;
-            try viewport.setStats(state, self.nodes.viewport_stats, &self.stats_text, null);
-            return;
-        }
-
-        if (!self.stats_visible) {
-            self.stats_visible = true;
-            self.stats_refresh.reset();
-        }
-        if (!self.stats_refresh.shouldRefresh(dt)) return;
-        try viewport.setStats(state, self.nodes.viewport_stats, &self.stats_text, stats);
-    }
-
-    pub fn viewportRect(self: *const EditorUi) ui.Rect {
-        return self.dock.windowContentRect(self.refs.viewport_window) orelse .{};
-    }
-
-    pub fn controlsOwnMouse(self: *const EditorUi, state: *const ui.Ui) bool {
-        return viewport.controlsOwnMouse(state, self.nodes.viewport_stats);
-    }
-
-    pub fn processControls(self: *EditorUi, state: *const ui.Ui) void {
-        viewport.processControls(state, self.nodes.viewport_stats, self.controls);
-    }
-};
+pub fn commands(self: *const EditorUi, state: *const ui.Ui) viewport.Commands {
+    return viewport.commands(state, self.nodes.viewport_stats);
+}
 
 fn createDockTree(dock: *ui.DockSpace, nodes: EditorNodes) !EditorDockRefs {
     const scene_window = try dock.createWindow("Scene", nodes.left_panel, .{ .x = min_side_width, .y = min_main_height }, .{});
@@ -132,7 +126,7 @@ fn createDockTree(dock: *ui.DockSpace, nodes: EditorNodes) !EditorDockRefs {
     };
 }
 
-fn createEditorTree(state: *ui.Ui, control_textures: *viewport.ControlTextures) !EditorNodes {
+fn createEditorTree(state: *ui.Ui, control_icons: viewport.ControlIcons) !EditorNodes {
     const root = state.rootNode();
     try state.setStyle(root, state.theme.style(.{
         .width = .fill,
@@ -149,7 +143,7 @@ fn createEditorTree(state: *ui.Ui, control_textures: *viewport.ControlTextures) 
     });
 
     const scene_panel = try scene.build(state, dock_host);
-    const viewport_nodes = try viewport.build(state, dock_host, control_textures);
+    const viewport_nodes = try viewport.build(state, dock_host, control_icons);
     const inspector_panel = try inspector.build(state, dock_host);
     const console_panel = try console.build(state, dock_host);
 
