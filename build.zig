@@ -1,4 +1,5 @@
 const std = @import("std");
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -14,17 +15,19 @@ pub fn build(b: *std.Build) void {
     });
     const zgui_mod = zgui_dep.module("zGUI");
 
+    const editor_mod = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "zephyr_runtime", .module = runtime_mod },
+            .{ .name = "zGUI", .module = zgui_mod },
+        },
+    });
+
     const exe = b.addExecutable(.{
         .name = "zephyr_sandbox",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "zephyr_runtime", .module = runtime_mod },
-                .{ .name = "zGUI", .module = zgui_mod },
-            },
-        }),
+        .root_module = editor_mod,
     });
 
     b.installArtifact(exe);
@@ -41,15 +44,7 @@ pub fn build(b: *std.Build) void {
     }
 
     const editor_tests = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/test_root.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "zephyr_runtime", .module = runtime_mod },
-                .{ .name = "zGUI", .module = zgui_mod },
-            },
-        }),
+        .root_module = editor_mod,
     });
     const run_editor_tests = b.addRunArtifact(editor_tests);
     const test_step = b.step("test", "Run editor tests");
