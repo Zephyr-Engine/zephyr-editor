@@ -1,6 +1,8 @@
+const zp = @import("zephyr_runtime");
 const std = @import("std");
 const ui = @import("zGUI");
-const zp = @import("zephyr_runtime");
+
+const PlayState = @import("../state/play_state.zig").PlayState;
 
 pub const Nodes = struct {
     root: ui.NodeId,
@@ -16,15 +18,18 @@ pub const ControlTextures = struct {
     play: u32,
     pause: u32,
     stop: u32,
+
+    state: PlayState,
 };
 
-pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: ControlTextures) !Nodes {
+pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: *ControlTextures) !Nodes {
     const root = try ui.widgets.surface(state, parent, .{
         .width = .fill,
         .height = .fill,
         .direction = .absolute,
         .background = .viewport,
     });
+
     const image = try ui.widgets.image(state, root, .{
         .texture_id = 0,
         .style = state.theme.style(.{
@@ -46,6 +51,7 @@ pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: ControlTextures) !Nodes
         .padding = .{ .top = 9 },
         .background = .transparent,
     });
+
     _ = try ui.widgets.spacer(state, toolbar_row);
     const toolbar = try ui.widgets.row(state, toolbar_row, .{
         .width = .{ .px = 98 },
@@ -57,11 +63,12 @@ pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: ControlTextures) !Nodes
         .border_width = 1,
         .radius = .pill,
     });
+
     const toolbar_node = state.tree.get(toolbar).?;
     toolbar_node.style.background = ui.Color.rgba(17, 18, 22, 232);
     toolbar_node.style.border_color = ui.Color.rgba(255, 255, 255, 24);
-    _ = try ui.widgets.spacer(state, toolbar_row);
 
+    _ = try ui.widgets.spacer(state, toolbar_row);
     const play_button = try controlButton(state, toolbar, controls.play);
     const pause_button = try controlButton(state, toolbar, controls.pause);
     const stop_button = try controlButton(state, toolbar, controls.stop);
@@ -72,6 +79,7 @@ pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: ControlTextures) !Nodes
         .padding = .{ .top = 10, .right = 10 },
         .background = .transparent,
     });
+
     _ = try ui.widgets.spacer(state, stats_row);
     const stats_card = try ui.widgets.surface(state, stats_row, .{
         .width = .{ .px = 120 },
@@ -82,12 +90,14 @@ pub fn build(state: *ui.Ui, parent: ui.NodeId, controls: ControlTextures) !Nodes
         .border_width = 1,
         .radius = .control,
     });
+
     const stats_label = try ui.widgets.text(state, stats_card, "", .{
         .width = .fill,
         .height = .fill,
         .color = .text,
         .size = state.theme.font.small,
     });
+
     const card_node = state.tree.get(stats_card).?;
     card_node.style.background = ui.Color.rgba(30, 30, 36, 220);
     card_node.flags.visible = false;
@@ -107,6 +117,20 @@ pub fn controlsOwnMouse(state: *const ui.Ui, nodes: Nodes) bool {
     return isControl(nodes, state.input.hovered) or isControl(nodes, state.input.active);
 }
 
+pub fn processControls(state: *const ui.Ui, nodes: Nodes, controls: *ControlTextures) void {
+    if (ui.input.buttonClicked(state.input, nodes.play_button)) {
+        controls.state = controls.state.transition(.Play);
+    }
+
+    if (ui.input.buttonClicked(state.input, nodes.pause_button)) {
+        controls.state = controls.state.transition(.Pause);
+    }
+
+    if (ui.input.buttonClicked(state.input, nodes.stop_button)) {
+        controls.state = controls.state.transition(.Stop);
+    }
+}
+
 fn isControl(nodes: Nodes, id: ui.NodeId) bool {
     return id == nodes.play_button or id == nodes.pause_button or id == nodes.stop_button;
 }
@@ -124,9 +148,11 @@ fn controlButton(state: *ui.Ui, parent: ui.NodeId, texture_id: u32) !ui.NodeId {
         }),
         .tint = ui.Color.rgba(194, 198, 207, 255),
     });
+
     const node = state.tree.get(button).?;
     node.style.hover_background = ui.Color.rgba(255, 255, 255, 18);
     node.style.pressed_background = ui.Color.rgba(255, 255, 255, 30);
+
     return button;
 }
 

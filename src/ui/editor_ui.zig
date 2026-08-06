@@ -32,9 +32,10 @@ pub const EditorUi = struct {
     dock: ui.DockSpace,
     refs: EditorDockRefs,
     nodes: EditorNodes,
+    controls: *viewport.ControlTextures,
     stats_text: [128]u8 = undefined,
 
-    pub fn init(allocator: std.mem.Allocator, state: *ui.Ui, control_textures: viewport.ControlTextures) !EditorUi {
+    pub fn init(allocator: std.mem.Allocator, state: *ui.Ui, control_textures: *viewport.ControlTextures) !EditorUi {
         state.setTheme(ui.theme.zephyr_dark);
 
         var dock = try ui.DockSpace.init(allocator);
@@ -47,6 +48,7 @@ pub const EditorUi = struct {
             .dock = dock,
             .refs = refs,
             .nodes = nodes,
+            .controls = control_textures,
         };
     }
 
@@ -84,6 +86,10 @@ pub const EditorUi = struct {
     pub fn controlsOwnMouse(self: *const EditorUi, state: *const ui.Ui) bool {
         return viewport.controlsOwnMouse(state, self.nodes.viewport_stats);
     }
+
+    pub fn processControls(self: *EditorUi, state: *const ui.Ui) void {
+        viewport.processControls(state, self.nodes.viewport_stats, self.controls);
+    }
 };
 
 fn createDockTree(dock: *ui.DockSpace, nodes: EditorNodes) !EditorDockRefs {
@@ -111,7 +117,7 @@ fn createDockTree(dock: *ui.DockSpace, nodes: EditorNodes) !EditorDockRefs {
     };
 }
 
-fn createEditorTree(state: *ui.Ui, control_textures: viewport.ControlTextures) !EditorNodes {
+fn createEditorTree(state: *ui.Ui, control_textures: *viewport.ControlTextures) !EditorNodes {
     const root = state.root;
     state.tree.get(root).?.style = state.theme.style(.{
         .width = .fill,

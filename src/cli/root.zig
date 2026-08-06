@@ -1,5 +1,7 @@
-const std = @import("std");
 const zp = @import("zephyr_runtime");
+const std = @import("std");
+
+const log = @import("../utilities/log.zig");
 
 const default_project_name = "Zephyr Game Example";
 
@@ -70,7 +72,7 @@ pub fn createProject(
     try root_dir.createDirPath(io, manifest.cooked_assets_dir);
     try manifest.save(allocator, io, root_dir);
 
-    std.log.info("Created project at {s}", .{root_path});
+    log.info("Created project at {s}", .{root_path});
 }
 
 const testing = std.testing;

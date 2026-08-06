@@ -4,6 +4,8 @@ const std = @import("std");
 const EditorUi = @import("ui/editor_ui.zig").EditorUi;
 const editor_icons = @import("editor_icons.zig");
 const scene_input = @import("ui/scene_input.zig");
+const viewport_mod = @import("ui/viewport.zig");
+const log = @import("utilities/log.zig");
 const zp = @import("zephyr_runtime");
 const cli = @import("cli/root.zig");
 const Game = @import("game.zig");
@@ -12,7 +14,7 @@ const ui = @import("zGUI");
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     const options = cli.parse(args) catch |err| {
-        std.log.err("Invalid editor arguments: {}", .{err});
+        log.err("Invalid editor arguments: {}", .{err});
         return;
     };
 
@@ -31,7 +33,7 @@ pub fn main(init: std.process.Init) !void {
     defer project.stopWatchingAssets(watch_handle);
 
     watch_handle.waitForInitialCook() catch |err| {
-        std.log.err("Failed to cook initial assets: {}", .{err});
+        log.err("Failed to cook initial assets: {}", .{err});
         return;
     };
 
@@ -41,7 +43,7 @@ pub fn main(init: std.process.Init) !void {
         .height = null,
         .title = "Zephyr Editor",
     }, &project) catch |err| {
-        std.log.err("Application init failed: {}", .{err});
+        log.err("Application init failed: {}", .{err});
         return;
     };
     defer app.deinit();
@@ -51,7 +53,7 @@ pub fn main(init: std.process.Init) !void {
 
     var ui_renderer = try ui.OpenGlRenderer.init(zp.Window.getProcAddress);
     defer ui_renderer.deinit();
-    std.log.info("OpenGL: {s}", .{ui.OpenGlRenderer.versionString()});
+    log.info("OpenGL: {s}", .{ui.OpenGlRenderer.versionString()});
 
     const font_bytes = @embedFile("resources/fonts/Inter-Regular.ttf");
     var font_atlas = try ui.FontAtlas.init(
@@ -70,11 +72,14 @@ pub fn main(init: std.process.Init) !void {
     defer ui_state.deinit();
     ui_state.setFontAtlas(&font_atlas);
 
-    var editor = try EditorUi.init(init.gpa, &ui_state, .{
+    var control_textures = viewport_mod.ControlTextures{
         .play = icons.play,
         .pause = icons.pause,
         .stop = icons.stop,
-    });
+        .state = .Stop,
+    };
+
+    var editor = try EditorUi.init(init.gpa, &ui_state, &control_textures);
     defer editor.deinit();
 
     var viewport = try app.runtime.renderer.device.createFramebuffer(1, 1);
@@ -97,6 +102,7 @@ pub fn main(init: std.process.Init) !void {
         try ui_state.beginFrame(ui_frame.toBeginFrame());
 
         const dock_result = try editor.dockSpace(&ui_state, ui_frame.window_size);
+        editor.processControls(&ui_state);
         ui.zephyr_runtime.setCursor(app.window, ui_state.requestedCursor());
         editor.setViewportTexture(&ui_state, app.runtime.renderer.device.textureViewNativeId(viewport_texture));
         editor.setDebugStats(&ui_state, app.debugStats());
