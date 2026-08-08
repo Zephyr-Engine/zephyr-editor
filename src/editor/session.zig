@@ -13,6 +13,14 @@ pub fn handle(self: *Session, command: Command) ?PlayState.Transition {
     return transition;
 }
 
+pub fn canHandle(self: *const Session, command: Command) bool {
+    return switch (command) {
+        .play => self.play_state != .Play,
+        .pause => self.play_state == .Play,
+        .stop => self.play_state != .Stop,
+    };
+}
+
 test "play commands update the session once per distinct transition" {
     var session: Session = .{};
 
@@ -20,6 +28,8 @@ test "play commands update the session once per distinct transition" {
     try std.testing.expectEqual(PlayState.Stop, started.from);
     try std.testing.expectEqual(PlayState.Play, started.to);
     try std.testing.expect(session.handle(.play) == null);
+    try std.testing.expect(!session.canHandle(.play));
+    try std.testing.expect(session.canHandle(.pause));
 
     const paused = session.handle(.pause).?;
     try std.testing.expectEqual(PlayState.Pause, paused.to);

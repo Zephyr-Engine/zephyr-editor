@@ -7,8 +7,7 @@ const Backend = @import("../ui/zgui_runtime_backend.zig");
 const ViewportTarget = @import("../viewport_target.zig");
 const editor_icons = @import("../editor_icons.zig");
 const EditorUi = @import("../ui/editor_ui.zig");
-const Command = @import("command.zig").Command;
-const Session = @import("session.zig");
+const EditorContext = @import("context.zig");
 const Game = @import("../game.zig");
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project) !void {
@@ -21,7 +20,8 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project)
     defer app.deinit();
     app.setDebugStatsEnabled(true);
 
-    try app.runtime.world.setResource(Session, .{});
+    const editor_context = try EditorContext.create(allocator);
+    defer editor_context.destroy();
     try app.start();
 
     var ui_renderer = try ui.OpenGlRenderer.init(allocator, zp.Window.getProcAddress);
@@ -38,18 +38,17 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project)
     defer ui_state.deinit();
     ui_state.setFontAtlas(&font_atlas);
 
-    var editor = try EditorUi.init(allocator, &ui_state, .{
-        .play = icons.play,
-        .pause = icons.pause,
-        .stop = icons.stop,
-    });
-    defer editor.deinit();
-
     var viewport_target = try ViewportTarget.init(&app.runtime.renderer.device);
     defer viewport_target.deinit();
     var viewport_texture = try ui_renderer.registerExternalTexture(viewport_target.nativeTextureId());
     defer ui_renderer.destroyTexture(&viewport_texture);
-    try editor.setViewportTexture(&ui_state, viewport_texture);
+
+    var editor = try EditorUi.init(allocator, &ui_state, editor_context.actionRegistry(), viewport_texture, .{
+        .play = icons.play,
+        .pause = icons.pause,
+        .stop = icons.stop,
+    });
+    defer editor.deinit(&ui_state);
 
     var ui_backend = Backend.init(allocator, &ui_renderer);
     defer ui_backend.deinit();
@@ -67,10 +66,8 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project)
         try ui_state.beginFrame(frame.toBeginFrame());
 
         _ = try editor.dockSpace(&ui_state, frame.window_size);
-        const commands = editor.commands(&ui_state);
-        applyCommands(app.runtime.world.getResource(Session), commands.slice());
+        try editor.update(&ui_state, .{ .debug_stats = app.debugStats() });
         Backend.setCursor(app.window, ui_state.requestedCursor());
-        try editor.setDebugStats(&ui_state, app.debugStats());
 
         ui_state.setTextRasterScale(frame.text_raster_scale);
         try ui_state.endFrame();
@@ -82,7 +79,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project)
             runtime_events,
             viewport_rect,
             ui_state.mousePosition(),
-            ui_state.inputCapture().wants_mouse or editor.dock.isInteracting() or editor.controlsOwnMouse(&ui_state),
+            ui_state.inputCapture().wants_mouse or editor.isInteracting(),
         );
 
         try app.update();
@@ -94,13 +91,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project)
     }
 }
 
-fn applyCommands(session: *Session, commands: []const Command) void {
-    for (commands) |command| {
-        _ = session.handle(command);
-    }
-}
-
 test {
+    _ = @import("actions.zig");
     _ = @import("command.zig");
+    _ = @import("context.zig");
     _ = @import("session.zig");
 }
