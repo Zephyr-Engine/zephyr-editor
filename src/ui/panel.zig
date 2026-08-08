@@ -56,18 +56,24 @@ pub const Instance = struct {
     }
 
     pub fn mount(self: *Instance, state: *ui.Ui, parent: ui.NodeId, services: Services) !void {
-        if (self.mounted) return error.PanelAlreadyMounted;
+        if (self.mounted) {
+            return error.PanelAlreadyMounted;
+        }
         try self.vtable.mount(self.object, state, parent, services);
         self.mounted = true;
     }
 
     pub fn update(self: *Instance, state: *ui.Ui, frame: Frame) !void {
-        if (!self.mounted) return;
+        if (!self.mounted) {
+            return;
+        }
         try self.vtable.update(self.object, state, frame);
     }
 
     pub fn unmount(self: *Instance, state: *ui.Ui) void {
-        if (!self.mounted) return;
+        if (!self.mounted) {
+            return;
+        }
         self.vtable.unmount(self.object, state);
         self.mounted = false;
     }

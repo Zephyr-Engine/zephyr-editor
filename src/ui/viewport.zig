@@ -81,9 +81,27 @@ pub fn mount(self: *Viewport, state: *ui.Ui, parent: ui.NodeId, services: panel.
     try state.setStyle(toolbar, toolbar_style);
     _ = try ui.widgets.spacer(state, toolbar_row);
 
-    const play_button = try controlButton(state, toolbar, services.actions, actions.ids.play, self.icons.play);
-    const pause_button = try controlButton(state, toolbar, services.actions, actions.ids.pause, self.icons.pause);
-    const stop_button = try controlButton(state, toolbar, services.actions, actions.ids.stop, self.icons.stop);
+    const play_button = try controlButton(
+        state,
+        toolbar,
+        services.actions,
+        actions.ids.play,
+        self.icons.play,
+    );
+    const pause_button = try controlButton(
+        state,
+        toolbar,
+        services.actions,
+        actions.ids.pause,
+        self.icons.pause,
+    );
+    const stop_button = try controlButton(
+        state,
+        toolbar,
+        services.actions,
+        actions.ids.stop,
+        self.icons.stop,
+    );
 
     const stats_row = try ui.widgets.row(state, root_node, .{
         .width = .fill,

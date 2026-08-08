@@ -100,7 +100,9 @@ pub const Registry = struct {
 
     pub fn invoke(self: *Registry, id: ActionId) bool {
         const action = self.entries.get(id) orelse return false;
-        if (!action.enabled()) return false;
+        if (!action.enabled()) {
+            return false;
+        }
         action.execute();
         return true;
     }

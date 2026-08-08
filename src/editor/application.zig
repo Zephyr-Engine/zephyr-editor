@@ -5,7 +5,7 @@ const std = @import("std");
 const SceneInputCapture = @import("../ui/scene_input.zig");
 const Backend = @import("../ui/zgui_runtime_backend.zig");
 const ViewportTarget = @import("../viewport_target.zig");
-const editor_icons = @import("../editor_icons.zig");
+const Icons = @import("../icons/editor_icons.zig");
 const EditorUi = @import("../ui/editor_ui.zig");
 const EditorContext = @import("context.zig");
 const Game = @import("../game.zig");
@@ -31,7 +31,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project)
     var font_atlas = try ui.FontAtlas.init(allocator, font_bytes, 1024, 1024);
     defer font_atlas.deinit();
 
-    var icons = try editor_icons.Textures.init(&ui_renderer, allocator);
+    var icons = try Icons.init(&ui_renderer, allocator);
     defer icons.deinit(&ui_renderer);
 
     var ui_state = try ui.Ui.init(allocator);
@@ -40,6 +40,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project)
 
     var viewport_target = try ViewportTarget.init(&app.runtime.renderer.device);
     defer viewport_target.deinit();
+
     var viewport_texture = try ui_renderer.registerExternalTexture(viewport_target.nativeTextureId());
     defer ui_renderer.destroyTexture(&viewport_texture);
 
@@ -54,7 +55,6 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project)
     defer ui_backend.deinit();
 
     var scene_capture: SceneInputCapture = .{};
-
     while (app.window.shouldCloseWindow()) {
         const runtime_events = app.beginFrame();
         const frame = try ui_backend.beginFrame(.{
@@ -83,7 +83,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project)
         );
 
         try app.update();
-        if (viewport_target.renderTarget()) |target| try app.renderScene(target);
+        if (viewport_target.renderTarget()) |target| {
+            try app.renderScene(target);
+        }
 
         try ui_renderer.render(ui_state.drawData());
         try ui_renderer.endFrame();

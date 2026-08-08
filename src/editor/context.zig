@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const action_mod = @import("actions.zig");
 const Command = @import("command.zig").Command;
+const action_mod = @import("actions.zig");
 const Session = @import("session.zig");
 
 const EditorContext = @This();
