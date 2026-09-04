@@ -27,7 +27,7 @@ pub const VectorField = struct {
         });
         for (values, 0..) |component_value, index| {
             self.values[index] = component_value;
-            self.fields[index] = try ui.NumericField.initF32(allocator, state, host, component_value, options(hints, index));
+            self.fields[index] = try ui.NumericField.initF32(allocator, state, host, component_value, options(state, hints, index));
         }
         return self;
     }
@@ -40,7 +40,7 @@ pub const VectorField = struct {
         var changed = false;
         for (0..self.len) |index| {
             const before = self.values[index];
-            const result = try self.fields[index].?.updateF32(state, &self.values[index], options(hints, index));
+            const result = try self.fields[index].?.updateF32(state, &self.values[index], options(state, hints, index));
             if (result.changed and !result.committed) {
                 if (numeric.previewF32(self.fields[index].?.text.text(), hints)) |preview| self.values[index] = preview;
             }
@@ -58,8 +58,8 @@ pub const VectorField = struct {
         };
     }
 
-    fn options(hints: EditorHints, index: usize) ui.NumericOptions {
-        var result = numeric.options(hints, false);
+    fn options(state: *const ui.Ui, hints: EditorHints, index: usize) ui.NumericOptions {
+        var result = numeric.options(state, hints, false);
         result.trailing_label = componentLabel(index);
         result.trailing_label_color = componentColor(index);
         return result;

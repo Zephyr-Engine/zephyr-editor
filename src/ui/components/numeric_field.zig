@@ -21,7 +21,7 @@ pub const IntField = struct {
         var slider: ?ui.Slider = null;
         if (hasSlider(hints)) slider = try ui.Slider.init(state, host, sliderOptions(hints));
         return .{
-            .field = try ui.NumericField.initI32(allocator, state, host, value, options(hints, slider != null)),
+            .field = try ui.NumericField.initI32(allocator, state, host, value, options(state, hints, slider != null)),
             .slider = slider,
             .value = value,
         };
@@ -43,7 +43,7 @@ pub const IntField = struct {
                 changed = true;
             }
         }
-        const result = try self.field.updateI32(state, &self.value, options(hints, self.slider != null));
+        const result = try self.field.updateI32(state, &self.value, options(state, hints, self.slider != null));
         if (result.changed and !result.committed) {
             if (previewI32(self.field.text.text(), hints)) |value| self.value = value;
         }
@@ -68,7 +68,7 @@ pub const UintField = struct {
         var slider: ?ui.Slider = null;
         if (hasSlider(hints)) slider = try ui.Slider.init(state, host, sliderOptions(hints));
         return .{
-            .field = try ui.NumericField.initU32(allocator, state, host, value, options(hints, slider != null)),
+            .field = try ui.NumericField.initU32(allocator, state, host, value, options(state, hints, slider != null)),
             .slider = slider,
             .value = value,
         };
@@ -90,7 +90,7 @@ pub const UintField = struct {
                 changed = true;
             }
         }
-        const result = try self.field.updateU32(state, &self.value, options(hints, self.slider != null));
+        const result = try self.field.updateU32(state, &self.value, options(state, hints, self.slider != null));
         if (result.changed and !result.committed) {
             if (previewU32(self.field.text.text(), hints)) |value| self.value = value;
         }
@@ -115,7 +115,7 @@ pub const FloatField = struct {
         var slider: ?ui.Slider = null;
         if (hasSlider(hints)) slider = try ui.Slider.init(state, host, sliderOptions(hints));
         return .{
-            .field = try ui.NumericField.initF32(allocator, state, host, value, options(hints, slider != null)),
+            .field = try ui.NumericField.initF32(allocator, state, host, value, options(state, hints, slider != null)),
             .slider = slider,
             .value = value,
         };
@@ -133,7 +133,7 @@ pub const FloatField = struct {
             changed = try slider.update(state, &self.value, sliderOptions(hints));
             if (changed) try syncText(&self.field, state, self.value);
         }
-        const result = try self.field.updateF32(state, &self.value, options(hints, self.slider != null));
+        const result = try self.field.updateF32(state, &self.value, options(state, hints, self.slider != null));
         if (result.changed and !result.committed) {
             if (previewF32(self.field.text.text(), hints)) |value| self.value = value;
         }
@@ -141,13 +141,22 @@ pub const FloatField = struct {
     }
 };
 
-pub fn options(hints: EditorHints, compact: bool) ui.NumericOptions {
+pub fn options(state: *const ui.Ui, hints: EditorHints, compact: bool) ui.NumericOptions {
     return .{
         .min = hints.min,
         .max = hints.max,
         .step = hints.step,
-        .width = if (compact) .{ .px = 72 } else .fill,
+        .width = if (compact) .{ .px = compactWidth(state) } else .fill,
     };
+}
+
+/// A compact field sits beside a slider, so it has to hold a full float such as
+/// "0.7853982" plus the field's left inset and its trailing gutter. Deriving it
+/// from the type scale keeps the value from spilling when the theme grows.
+fn compactWidth(state: *const ui.Ui) f32 {
+    const glyphs = 9.0;
+    const glyph_width = state.theme.font.body * 0.55;
+    return @round(glyphs * glyph_width) + state.theme.space.lg * 2 + state.theme.metrics.control_height;
 }
 
 pub fn previewF32(text: []const u8, hints: EditorHints) ?f32 {

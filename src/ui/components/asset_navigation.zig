@@ -25,15 +25,21 @@ pub const AssetNavigation = struct {
         _ = try ui.widgets.text(state, root, "PROJECT ASSETS", .{
             .width = .{ .px = 102 },
             .height = .fill,
-            .padding = .{ .left = state.theme.space.sm, .top = state.theme.space.sm },
+            .padding = .{ .left = state.theme.space.sm, .top = state.centeredTextTop(
+                state.theme.metrics.section_header_height - state.theme.space.sm * 2,
+                13,
+            ) },
             .color = .text_dim,
-            .size = 11,
+            .size = 13,
         });
         const path_label = try ui.widgets.text(state, root, "", .{
             .width = .fill,
             .height = .fill,
-            .padding = .{ .left = state.theme.space.xxs, .top = state.theme.space.sm },
-            .size = 12,
+            .padding = .{ .left = state.theme.space.xxs, .top = state.centeredTextTop(
+                state.theme.metrics.section_header_height - state.theme.space.sm * 2,
+                14,
+            ) },
+            .size = 14,
             .color = .text_muted,
         });
         return .{
@@ -65,13 +71,13 @@ pub const AssetNavigation = struct {
         return ui.widgets.button(state, parent, label, state.theme.style(.{
             .width = .{ .px = 22 },
             .height = .{ .px = state.theme.metrics.compact_control_height },
-            .padding = .{ .left = state.theme.space.sm, .top = state.theme.space.xs },
+            .padding = .{ .left = state.theme.space.sm, .top = state.centeredTextTop(state.theme.metrics.compact_control_height, 16) },
             .background = .transparent,
             .hover_background = .interaction_hover,
             .pressed_background = .accent_hover,
             .border = .transparent,
             .radius = .control,
-            .font_size = 14,
+            .font_size = 16,
         }));
     }
 

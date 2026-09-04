@@ -37,8 +37,8 @@ pub fn mount(self: *Console, state: *ui.Ui, parent: ui.NodeId, _: panel.Services
     _ = try ui.widgets.text(state, header, "Console", .{
         .width = .{ .px = 72 },
         .height = .fill,
-        .padding = .{ .top = state.theme.space.sm },
-        .size = 14,
+        .padding = .{ .top = state.centeredTextTop(state.theme.metrics.compact_control_height, 16) },
+        .size = 16,
     });
 
     self.root_node = root_node;

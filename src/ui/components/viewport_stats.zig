@@ -9,9 +9,13 @@ pub const ViewportStats = struct {
     visible: bool = false,
 
     pub fn init(state: *ui.Ui, parent: ui.NodeId) !ViewportStats {
+        // Size the card to three lines of the theme's small type so it keeps
+        // its proportions when the type scale changes.
+        const card_height = @round(state.textLineHeight(state.theme.font.small) * 3 +
+            state.theme.space.md * 2);
         const placement = try ui.widgets.row(state, parent, .{
             .width = .fill,
-            .height = .{ .px = 76 },
+            .height = .{ .px = card_height + state.theme.space.lg * 2 },
             .padding = .{ .top = state.theme.space.lg, .right = state.theme.space.lg },
             .background = .transparent,
         });
@@ -19,7 +23,7 @@ pub const ViewportStats = struct {
         _ = try ui.widgets.spacer(state, placement);
         const card = try ui.widgets.surface(state, placement, .{
             .width = .{ .px = 128 },
-            .height = .{ .px = 54 },
+            .height = .{ .px = card_height },
             .padding = .{
                 .left = state.theme.space.lg,
                 .right = state.theme.space.lg,

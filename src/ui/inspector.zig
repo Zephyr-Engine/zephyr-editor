@@ -243,10 +243,6 @@ fn rebuild(self: *Inspector, state: *ui.Ui) !void {
         .height = .{ .px = state.theme.metrics.section_header_height },
         .direction = .row,
         .gap = state.theme.space.sm,
-        .padding = .{
-            .top = state.theme.space.xl,
-            .bottom = state.theme.space.xl,
-        },
         .background = .accent,
         .border = .accent,
         .border_width = 1,
@@ -257,15 +253,15 @@ fn rebuild(self: *Inspector, state: *ui.Ui) !void {
     _ = try ui.widgets.surface(state, self.add_component_button, .{ .width = .fill, .height = .fill });
     _ = try ui.widgets.text(state, self.add_component_button, "+", .{
         .height = .fill,
-        .margin = .{ .top = -6 },
+        .padding = .{ .top = state.centeredTextTop(state.theme.metrics.section_header_height, 20) },
         .color = .text,
-        .size = 18,
+        .size = 20,
     });
     _ = try ui.widgets.text(state, self.add_component_button, "Add component", .{
         .height = .fill,
+        .padding = .{ .top = state.centeredTextTop(state.theme.metrics.section_header_height, 16) },
         .color = .text,
-        .margin = .{ .top = -2 },
-        .size = 14,
+        .size = 16,
     });
     _ = try ui.widgets.surface(state, self.add_component_button, .{ .width = .fill, .height = .fill });
 }
@@ -291,7 +287,7 @@ fn showAddComponentList(self: *Inspector, state: *ui.Ui, entity: *const zimp.sce
     const overlay_bounds = state.bounds(self.overlay_node) orelse return;
     try component_list.show(state, .{
         .x = button_bounds.x - overlay_bounds.x,
-        .y = button_bounds.y - overlay_bounds.y + button_bounds.h,
+        .y = button_bounds.y - overlay_bounds.y + button_bounds.h + state.theme.space.xs,
     });
 }
 
@@ -358,9 +354,9 @@ fn renderComponent(self: *Inspector, state: *ui.Ui, parent: ui.NodeId, component
         _ = try ui.widgets.text(state, body, "No editable properties", .{
             .width = .fill,
             .height = .{ .px = 24 },
-            .padding = .{ .top = state.theme.space.sm },
+            .padding = .{ .top = state.centeredTextTop(24, 13) },
             .color = .text_muted,
-            .size = 11,
+            .size = 13,
         });
     }
     try self.components.append(self.allocator, .{
@@ -382,8 +378,9 @@ fn addUnknownComponent(self: *Inspector, state: *ui.Ui, parent: ui.NodeId, compo
     _ = try ui.widgets.text(state, section.body(), &id_text, .{
         .width = .fill,
         .height = .{ .px = 18 },
+        .padding = .{ .top = state.centeredTextTop(18, 12) },
         .color = .text_muted,
-        .size = 10,
+        .size = 12,
     });
     try self.components.append(self.allocator, .{
         .collapsible = section,
@@ -418,7 +415,7 @@ fn openComponentMenu(self: *Inspector, state: *ui.Ui, trigger: ui.NodeId) !void 
     const trigger_bounds = state.bounds(trigger) orelse return;
     try menu.show(state, .{
         .x = trigger_bounds.x - root_bounds.x + trigger_bounds.w - component_menu_width,
-        .y = trigger_bounds.y - root_bounds.y + trigger_bounds.h,
+        .y = trigger_bounds.y - root_bounds.y + trigger_bounds.h + state.theme.space.xs,
     });
 }
 
@@ -437,14 +434,16 @@ fn addEmptyState(state: *ui.Ui, parent: ui.NodeId, has_scene: bool) !void {
     _ = try ui.widgets.text(state, card, if (has_scene) "Nothing selected" else "No scene loaded", .{
         .width = .fill,
         .height = .{ .px = 24 },
+        .padding = .{ .top = state.centeredTextTop(24, 15) },
         .color = .text_dim,
-        .size = 13,
+        .size = 15,
     });
     _ = try ui.widgets.text(state, card, if (has_scene) "Select an entity in the Scene panel to inspect and edit it." else "Open a scene to inspect its entities.", .{
         .width = .fill,
         .height = .{ .px = 20 },
+        .padding = .{ .top = state.centeredTextTop(20, 13) },
         .color = .text_muted,
-        .size = 11,
+        .size = 13,
     });
 }
 

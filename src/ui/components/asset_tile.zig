@@ -61,14 +61,14 @@ pub const AssetTile = struct {
 
         var name_buffer: [16]u8 = undefined;
         var type_buffer: [16]u8 = undefined;
-        try centeredLabel(state, node, shortened(std.fs.path.basename(item.path), &name_buffer), .text, 12, 18);
+        try centeredLabel(state, node, shortened(std.fs.path.basename(item.path), &name_buffer), .text, 14, 20);
         try centeredLabel(
             state,
             node,
             shortened(if (item.kind == .folder) folderKind(current_path) else fileKind(item.path), &type_buffer),
             .text_muted,
-            10,
-            13,
+            12,
+            15,
         );
         return .{ .node = node };
     }

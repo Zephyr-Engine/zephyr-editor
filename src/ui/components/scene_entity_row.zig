@@ -58,9 +58,12 @@ pub const SceneEntityRow = struct {
         _ = try ui.widgets.text(state, node, entity.name, .{
             .width = .fill,
             .height = .fill,
-            .padding = .{ .top = state.theme.space.xxs },
+            .padding = .{ .top = state.centeredTextTop(
+                state.theme.metrics.control_height - state.theme.space.sm * 2,
+                15,
+            ) },
             .color = if (selected) .text else .text_muted,
-            .size = 13,
+            .size = 15,
         });
         return .{ .node = node, .entity_id = entity.id };
     }

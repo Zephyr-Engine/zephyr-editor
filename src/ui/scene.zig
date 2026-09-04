@@ -137,9 +137,9 @@ fn rebuildList(self: *Scene, state: *ui.Ui) !void {
         _ = try ui.widgets.text(state, list_node, "No scene loaded", .{
             .width = .fill,
             .height = .{ .px = 28 },
-            .padding = .{ .left = state.theme.space.lg, .top = state.theme.space.sm },
+            .padding = .{ .left = state.theme.space.lg, .top = state.centeredTextTop(28, 14) },
             .color = .text_muted,
-            .size = 12,
+            .size = 14,
         });
     }
     self.list_node = list_node;
