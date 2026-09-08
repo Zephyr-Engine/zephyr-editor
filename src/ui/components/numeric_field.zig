@@ -4,142 +4,88 @@ const zimp = @import("zimp");
 
 const EditorHints = zimp.scene.EditorFieldHints;
 
-pub const IntField = struct {
-    field: ui.NumericField,
-    slider: ?ui.Slider = null,
-    value: i32,
+/// `IntField`, `UintField` and `FloatField` are the same control — a numeric
+/// text field with an optional bound slider and live preview while typing —
+/// differing only in scalar type and in whether slider output needs rounding.
+/// Generating them keeps that behaviour written once.
+fn NumericField(comptime T: type) type {
+    return struct {
+        const Self = @This();
 
-    pub fn init(
-        allocator: std.mem.Allocator,
-        state: *ui.Ui,
-        parent: ui.NodeId,
-        value: i32,
-        hints: EditorHints,
-    ) !IntField {
-        const host = try controlHost(state, parent, hasSlider(hints));
-        errdefer if (host != parent) state.destroySubtree(host);
-        var slider: ?ui.Slider = null;
-        if (hasSlider(hints)) slider = try ui.Slider.init(state, host, sliderOptions(hints));
-        return .{
-            .field = try ui.NumericField.initI32(allocator, state, host, value, options(state, hints, slider != null)),
-            .slider = slider,
-            .value = value,
-        };
-    }
+        field: ui.NumericField,
+        slider: ?ui.Slider = null,
+        value: T,
 
-    pub fn deinit(self: *IntField, state: *ui.Ui) void {
-        self.field.deinit(state);
-        if (self.slider) |*slider| slider.deinit(state);
-    }
+        pub fn init(
+            allocator: std.mem.Allocator,
+            state: *ui.Ui,
+            parent: ui.NodeId,
+            value: T,
+            hints: EditorHints,
+        ) !Self {
+            const host = try controlHost(state, parent, hasSlider(hints));
+            errdefer if (host != parent) state.destroySubtree(host);
+            var slider: ?ui.Slider = null;
+            if (hasSlider(hints)) slider = try ui.Slider.init(state, host, sliderOptions(hints));
+            const opts = options(state, hints, slider != null);
+            return .{
+                .field = switch (T) {
+                    i32 => try ui.NumericField.initI32(allocator, state, host, value, opts),
+                    u32 => try ui.NumericField.initU32(allocator, state, host, value, opts),
+                    f32 => try ui.NumericField.initF32(allocator, state, host, value, opts),
+                    else => @compileError("unsupported numeric field type"),
+                },
+                .slider = slider,
+                .value = value,
+            };
+        }
 
-    pub fn update(self: *IntField, state: *ui.Ui, hints: EditorHints) !bool {
-        const before = self.value;
-        var changed = false;
-        if (self.slider) |*slider| {
-            var value: f32 = @floatFromInt(self.value);
-            if (try slider.update(state, &value, sliderOptions(hints))) {
-                self.value = @intFromFloat(@round(value));
-                try syncText(&self.field, state, self.value);
-                changed = true;
+        pub fn deinit(self: *Self, state: *ui.Ui) void {
+            self.field.deinit(state);
+            if (self.slider) |*slider| slider.deinit(state);
+        }
+
+        pub fn update(self: *Self, state: *ui.Ui, hints: EditorHints) !bool {
+            const before = self.value;
+            var changed = false;
+            if (self.slider) |*slider| {
+                if (T == f32) {
+                    changed = try slider.update(state, &self.value, sliderOptions(hints));
+                    if (changed) try syncText(&self.field, state, self.value);
+                } else {
+                    var value: f32 = @floatFromInt(self.value);
+                    if (try slider.update(state, &value, sliderOptions(hints))) {
+                        const rounded = @round(value);
+                        self.value = @intFromFloat(if (T == u32) @max(0, rounded) else rounded);
+                        try syncText(&self.field, state, self.value);
+                        changed = true;
+                    }
+                }
             }
-        }
-        const result = try self.field.updateI32(state, &self.value, options(state, hints, self.slider != null));
-        if (result.changed and !result.committed) {
-            if (previewI32(self.field.text.text(), hints)) |value| self.value = value;
-        }
-        return changed or self.value != before;
-    }
-};
-
-pub const UintField = struct {
-    field: ui.NumericField,
-    slider: ?ui.Slider = null,
-    value: u32,
-
-    pub fn init(
-        allocator: std.mem.Allocator,
-        state: *ui.Ui,
-        parent: ui.NodeId,
-        value: u32,
-        hints: EditorHints,
-    ) !UintField {
-        const host = try controlHost(state, parent, hasSlider(hints));
-        errdefer if (host != parent) state.destroySubtree(host);
-        var slider: ?ui.Slider = null;
-        if (hasSlider(hints)) slider = try ui.Slider.init(state, host, sliderOptions(hints));
-        return .{
-            .field = try ui.NumericField.initU32(allocator, state, host, value, options(state, hints, slider != null)),
-            .slider = slider,
-            .value = value,
-        };
-    }
-
-    pub fn deinit(self: *UintField, state: *ui.Ui) void {
-        self.field.deinit(state);
-        if (self.slider) |*slider| slider.deinit(state);
-    }
-
-    pub fn update(self: *UintField, state: *ui.Ui, hints: EditorHints) !bool {
-        const before = self.value;
-        var changed = false;
-        if (self.slider) |*slider| {
-            var value: f32 = @floatFromInt(self.value);
-            if (try slider.update(state, &value, sliderOptions(hints))) {
-                self.value = @intFromFloat(@max(0, @round(value)));
-                try syncText(&self.field, state, self.value);
-                changed = true;
+            const opts = options(state, hints, self.slider != null);
+            const result = switch (T) {
+                i32 => try self.field.updateI32(state, &self.value, opts),
+                u32 => try self.field.updateU32(state, &self.value, opts),
+                f32 => try self.field.updateF32(state, &self.value, opts),
+                else => unreachable,
+            };
+            if (result.changed and !result.committed) {
+                const preview = switch (T) {
+                    i32 => previewI32(self.field.text.text(), hints),
+                    u32 => previewU32(self.field.text.text(), hints),
+                    f32 => previewF32(self.field.text.text(), hints),
+                    else => unreachable,
+                };
+                if (preview) |value| self.value = value;
             }
+            return changed or self.value != before;
         }
-        const result = try self.field.updateU32(state, &self.value, options(state, hints, self.slider != null));
-        if (result.changed and !result.committed) {
-            if (previewU32(self.field.text.text(), hints)) |value| self.value = value;
-        }
-        return changed or self.value != before;
-    }
-};
+    };
+}
 
-pub const FloatField = struct {
-    field: ui.NumericField,
-    slider: ?ui.Slider = null,
-    value: f32,
-
-    pub fn init(
-        allocator: std.mem.Allocator,
-        state: *ui.Ui,
-        parent: ui.NodeId,
-        value: f32,
-        hints: EditorHints,
-    ) !FloatField {
-        const host = try controlHost(state, parent, hasSlider(hints));
-        errdefer if (host != parent) state.destroySubtree(host);
-        var slider: ?ui.Slider = null;
-        if (hasSlider(hints)) slider = try ui.Slider.init(state, host, sliderOptions(hints));
-        return .{
-            .field = try ui.NumericField.initF32(allocator, state, host, value, options(state, hints, slider != null)),
-            .slider = slider,
-            .value = value,
-        };
-    }
-
-    pub fn deinit(self: *FloatField, state: *ui.Ui) void {
-        self.field.deinit(state);
-        if (self.slider) |*slider| slider.deinit(state);
-    }
-
-    pub fn update(self: *FloatField, state: *ui.Ui, hints: EditorHints) !bool {
-        const before = self.value;
-        var changed = false;
-        if (self.slider) |*slider| {
-            changed = try slider.update(state, &self.value, sliderOptions(hints));
-            if (changed) try syncText(&self.field, state, self.value);
-        }
-        const result = try self.field.updateF32(state, &self.value, options(state, hints, self.slider != null));
-        if (result.changed and !result.committed) {
-            if (previewF32(self.field.text.text(), hints)) |value| self.value = value;
-        }
-        return changed or self.value != before;
-    }
-};
+pub const IntField = NumericField(i32);
+pub const UintField = NumericField(u32);
+pub const FloatField = NumericField(f32);
 
 pub fn options(state: *const ui.Ui, hints: EditorHints, compact: bool) ui.NumericOptions {
     return .{

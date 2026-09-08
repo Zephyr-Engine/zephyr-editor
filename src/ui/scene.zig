@@ -1,7 +1,5 @@
 const std = @import("std");
 const ui = @import("zGUI");
-const zimp = @import("zimp");
-const zp = @import("zephyr_runtime");
 
 const SceneController = @import("../editor/scene_controller.zig");
 const SceneEntityRow = @import("components/scene_entity_row.zig").SceneEntityRow;
@@ -105,14 +103,6 @@ fn refresh(self: *Scene, state: *ui.Ui, force: bool) !void {
     if (!force and self.scene_revision == next_revision) return;
     self.scene_revision = next_revision;
 
-    if (self.scenes.activeDocument()) |scene_document| {
-        if (self.scenes.selectedEntity()) |selected| {
-            if (!containsEntity(scene_document.document.entities, selected)) self.scenes.selectEntity(null);
-        }
-    } else {
-        self.scenes.selectEntity(null);
-    }
-    self.scene_revision = self.scenes.revision();
     try self.rebuildList(state);
 }
 
@@ -137,15 +127,11 @@ fn rebuildList(self: *Scene, state: *ui.Ui) !void {
         _ = try ui.widgets.text(state, list_node, "No scene loaded", .{
             .width = .fill,
             .height = .{ .px = 28 },
-            .padding = .{ .left = state.theme.space.lg, .top = state.centeredTextTop(28, 14) },
+            .padding = .{ .left = state.theme.space.lg, .top = state.centeredTextTop(28, state.theme.font.small) },
             .color = .text_muted,
-            .size = 14,
+            .size = state.theme.font.small,
         });
     }
     self.list_node = list_node;
 }
 
-fn containsEntity(entities: []const zimp.scene.SceneEntity, id: zp.SceneEntityId) bool {
-    for (entities) |entity| if (entity.id.eql(id)) return true;
-    return false;
-}

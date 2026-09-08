@@ -27,19 +27,19 @@ pub const AssetNavigation = struct {
             .height = .fill,
             .padding = .{ .left = state.theme.space.sm, .top = state.centeredTextTop(
                 state.theme.metrics.section_header_height - state.theme.space.sm * 2,
-                13,
+                state.theme.font.tiny,
             ) },
             .color = .text_dim,
-            .size = 13,
+            .size = state.theme.font.tiny,
         });
         const path_label = try ui.widgets.text(state, root, "", .{
             .width = .fill,
             .height = .fill,
             .padding = .{ .left = state.theme.space.xxs, .top = state.centeredTextTop(
                 state.theme.metrics.section_header_height - state.theme.space.sm * 2,
-                14,
+                state.theme.font.small,
             ) },
-            .size = 14,
+            .size = state.theme.font.small,
             .color = .text_muted,
         });
         return .{

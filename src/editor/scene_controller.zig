@@ -108,6 +108,11 @@ pub fn commitSceneMutation(self: *SceneController, mutation: SceneMutation) !voi
     const active_scene = self.activeDocument();
     if (active_scene) |scene| {
         try mutation.apply(scene);
+        if (self.selected_entity) |selected| {
+            if (scene.document.entityIndex(selected) == null) {
+                self.selected_entity = null;
+            }
+        }
         self.markDirty();
         self.revision_number +%= 1;
     }

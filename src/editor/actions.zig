@@ -1,15 +1,12 @@
 const std = @import("std");
 const ui = @import("zGUI");
 const log = @import("../utilities/log.zig");
+const hash = @import("../utilities/hash.zig");
 
 pub const ActionId = u64;
 
 pub fn actionId(comptime name: []const u8) ActionId {
-    comptime var hash: u64 = 14695981039346656037;
-    inline for (name) |byte| {
-        hash = (hash ^ byte) *% 1099511628211;
-    }
-    return hash;
+    return hash.fnv1a(name);
 }
 
 pub const ids = struct {

@@ -123,12 +123,6 @@ fn applyCreateEntity(scene: *LoadedScene, input: CreateEntity) !void {
     }
 
     const gpa = scene_document.arena.allocator();
-    const new_entities = try gpa.alloc(
-        SceneEntity,
-        scene_document.entities.len + 1,
-    );
-    @memcpy(new_entities[0..scene_document.entities.len], scene_document.entities);
-
     const entity = SceneEntity{
         .id = input.id,
         .parent_id = input.parent_id,
@@ -137,8 +131,7 @@ fn applyCreateEntity(scene: *LoadedScene, input: CreateEntity) !void {
         .prefab = .{},
     };
 
-    new_entities[scene_document.entities.len] = entity;
-    scene_document.entities = new_entities;
+    scene_document.entities = try appendOne(gpa, SceneEntity, scene_document.entities, entity);
 
     _ = try scene.spawnEntity(entity);
 }
@@ -149,6 +142,23 @@ fn applyRenameEntity(scene: *LoadedScene, input: RenameEntity) !void {
     document.entities[index].name = try document.arena.allocator().dupe(u8, input.name);
 }
 
+/// The scene document owns its slices in an arena, so growing or shrinking one
+/// by a single element means reallocating and copying around the edit point.
+/// Both shapes show up for entities, components and fields alike.
+fn appendOne(gpa: std.mem.Allocator, comptime T: type, slice: []const T, item: T) ![]T {
+    const out = try gpa.alloc(T, slice.len + 1);
+    @memcpy(out[0..slice.len], slice);
+    out[slice.len] = item;
+    return out;
+}
+
+fn removeAt(gpa: std.mem.Allocator, comptime T: type, slice: []const T, index: usize) ![]T {
+    const out = try gpa.alloc(T, slice.len - 1);
+    @memcpy(out[0..index], slice[0..index]);
+    @memcpy(out[index..], slice[index + 1 ..]);
+    return out;
+}
+
 fn applyDeleteEntity(scene: *LoadedScene, input: DeleteEntity) !void {
     const document = &scene.document;
     const target_index = try requireEntity(scene, input.id);
@@ -156,10 +166,7 @@ fn applyDeleteEntity(scene: *LoadedScene, input: DeleteEntity) !void {
 
     var deleted_count: usize = 0;
     for (document.entities) |entity| {
-        const deleted = switch (input.policy) {
-            .reject_if_children, .reparent_children => entity.id.eql(input.id),
-            .delete_subtree => isInSubtree(scene, entity.id, input.id),
-        };
+        const deleted = isInDeletedSet(scene, entity.id, input);
 
         if (deleted) {
             deleted_count += 1;
@@ -237,20 +244,10 @@ fn isInSubtree(scene: *const LoadedScene, id: SceneEntityId, subtree_root_id: Sc
     return false;
 }
 
+/// Reparenting closes a cycle exactly when the entity is already an ancestor of
+/// the candidate parent, so the subtree walk answers this directly.
 fn wouldReparentCreateCycle(scene: *LoadedScene, entity_id: SceneEntityId, candidate_parent_id: SceneEntityId) bool {
-    const document = &scene.document;
-    var cursor: ?zimp.SceneEntityId = candidate_parent_id;
-
-    while (cursor) |parent_id| {
-        if (parent_id.eql(entity_id)) {
-            return true;
-        }
-
-        const index = document.entityIndex(parent_id) orelse return false;
-        cursor = document.entities[index].parent_id;
-    }
-
-    return false;
+    return isInSubtree(scene, candidate_parent_id, entity_id);
 }
 
 fn applyReparentEntity(scene: *LoadedScene, input: ReparentEntity) !void {
@@ -316,14 +313,7 @@ fn applyAddComponent(scene: *LoadedScene, input: AddComponent) !void {
     }
 
     const gpa = scene.document.arena.allocator();
-    const new_components = try gpa.alloc(
-        SceneComponent,
-        entity.components.len + 1,
-    );
-    @memcpy(new_components[0..entity.components.len], entity.components);
-    new_components[entity.components.len] = try input.component.clone(gpa);
-
-    entity.components = new_components;
+    entity.components = try appendOne(gpa, SceneComponent, entity.components, try input.component.clone(gpa));
     try scene.addComponent(entity, input.component);
 }
 
@@ -336,14 +326,7 @@ fn applyRemoveComponent(scene: *LoadedScene, input: RemoveComponent) !void {
     };
 
     const gpa = scene.document.arena.allocator();
-    const new_components = try gpa.alloc(
-        SceneComponent,
-        entity.components.len - 1,
-    );
-    @memcpy(new_components[0..remove_index], entity.components[0..remove_index]);
-    @memcpy(new_components[remove_index..], entity.components[remove_index + 1 ..]);
-
-    entity.components = new_components;
+    entity.components = try removeAt(gpa, SceneComponent, entity.components, remove_index);
     try scene.removeComponent(entity, input.type_id);
 }
 
@@ -393,18 +376,10 @@ fn applyAddField(scene: *LoadedScene, input: AddField) !void {
     const value = try input.value.clone(scene.document.arena.allocator());
 
     const gpa = scene.document.arena.allocator();
-    const new_fields = try gpa.alloc(
-        SceneField,
-        component.fields.len + 1,
-    );
-
-    @memcpy(new_fields[0..component.fields.len], component.fields);
-    new_fields[component.fields.len] = .{
+    component.fields = try appendOne(gpa, SceneField, component.fields, .{
         .number = input.field_number,
         .value = value,
-    };
-
-    component.fields = new_fields;
+    });
     try scene.addField(entity, input.type_id, input.field_number, value);
 }
 
@@ -425,14 +400,7 @@ fn applyRemoveField(scene: *LoadedScene, input: RemoveField) !void {
     };
 
     const gpa = scene.document.arena.allocator();
-    const new_fields = try gpa.alloc(
-        SceneField,
-        component.fields.len - 1,
-    );
-    @memcpy(new_fields[0..remove_index], component.fields[0..remove_index]);
-    @memcpy(new_fields[remove_index..], component.fields[remove_index + 1 ..]);
-
-    component.fields = new_fields;
+    component.fields = try removeAt(gpa, SceneField, component.fields, remove_index);
     try scene.removeField(entity, input.type_id, input.field_number);
 }
 

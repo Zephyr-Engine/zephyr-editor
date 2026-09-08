@@ -60,10 +60,10 @@ pub const SceneEntityRow = struct {
             .height = .fill,
             .padding = .{ .top = state.centeredTextTop(
                 state.theme.metrics.control_height - state.theme.space.sm * 2,
-                15,
+                state.theme.font.body,
             ) },
             .color = if (selected) .text else .text_muted,
-            .size = 15,
+            .size = state.theme.font.body,
         });
         return .{ .node = node, .entity_id = entity.id };
     }

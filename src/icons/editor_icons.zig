@@ -85,15 +85,7 @@ fn load(
     filename: []const u8,
     encoded: []const u8,
 ) !ui.TextureHandle {
-    var decoded = try zimp.assets.raw.texture.RawTexture.init(filename, @constCast(encoded));
-    defer decoded.deinit(allocator);
-
-    const pixels = switch (decoded.pixels) {
-        .ldr => |pixels| pixels,
-        .hdr => return error.UnsupportedEditorIconFormat,
-    };
-
-    return renderer.createTextureRgba(decoded.width, decoded.height, pixels);
+    return upload(renderer, allocator, filename, encoded, false);
 }
 
 fn loadMask(
@@ -101,6 +93,16 @@ fn loadMask(
     allocator: std.mem.Allocator,
     filename: []const u8,
     encoded: []const u8,
+) !ui.TextureHandle {
+    return upload(renderer, allocator, filename, encoded, true);
+}
+
+fn upload(
+    renderer: *ui.OpenGlRenderer,
+    allocator: std.mem.Allocator,
+    filename: []const u8,
+    encoded: []const u8,
+    as_mask: bool,
 ) !ui.TextureHandle {
     var decoded = try zimp.assets.raw.texture.RawTexture.init(filename, @constCast(encoded));
     defer decoded.deinit(allocator);
@@ -110,11 +112,13 @@ fn loadMask(
         .hdr => return error.UnsupportedEditorIconFormat,
     };
 
-    // The source glyphs are black silhouettes. Store them as white-alpha masks
-    // so zGUI can tint them for the dark editor theme.
-    var i: usize = 0;
-    while (i + 4 <= pixels.len) : (i += 4) {
-        @memset(pixels[i..][0..3], 255);
+    if (as_mask) {
+        // The source glyphs are black silhouettes. Store them as white-alpha
+        // masks so zGUI can tint them for the dark editor theme.
+        var i: usize = 0;
+        while (i + 4 <= pixels.len) : (i += 4) {
+            @memset(pixels[i..][0..3], 255);
+        }
     }
 
     return renderer.createTextureRgba(decoded.width, decoded.height, pixels);

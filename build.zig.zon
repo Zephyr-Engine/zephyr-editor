@@ -8,8 +8,8 @@
             .path = "../zephyr-runtime",
         },
         .zGUI = .{
-            .url = "git+https://github.com/Zephyr-Engine/zGUI.git?ref=modern#135298a2310d6cf2e8c2af5d153d14475a37e0d3",
-            .hash = "zGUI-0.0.0-LDuKkau0EACxBed22myv7dA-UJ9uyp8NSKx1S_X4vdz-",
+            .url = "git+https://github.com/Zephyr-Engine/zGUI.git?ref=modern#d2c7ea66c9ad8853374fa85313eb48de0d066100",
+            .hash = "zGUI-0.0.0-LDuKkSajEABb69NMjOo7M8yIHxJjpnTyPqPw0IGK7oAR",
         },
     },
     .paths = .{

@@ -3,15 +3,12 @@ const ui = @import("zGUI");
 const zp = @import("zephyr_runtime");
 
 const actions = @import("../editor/actions.zig");
+const hash = @import("../utilities/hash.zig");
 
 pub const Id = u64;
 
 pub fn id(comptime name: []const u8) Id {
-    comptime var hash: u64 = 14695981039346656037;
-    inline for (name) |byte| {
-        hash = (hash ^ byte) *% 1099511628211;
-    }
-    return hash;
+    return hash.fnv1a(name);
 }
 
 pub const Descriptor = struct {

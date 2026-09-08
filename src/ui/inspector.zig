@@ -253,9 +253,9 @@ fn rebuild(self: *Inspector, state: *ui.Ui) !void {
     _ = try ui.widgets.surface(state, self.add_component_button, .{ .width = .fill, .height = .fill });
     _ = try ui.widgets.text(state, self.add_component_button, "+", .{
         .height = .fill,
-        .padding = .{ .top = state.centeredTextTop(state.theme.metrics.section_header_height, 20) },
+        .padding = .{ .top = state.centeredTextTop(state.theme.metrics.section_header_height, state.theme.font.brand) },
         .color = .text,
-        .size = 20,
+        .size = state.theme.font.brand,
     });
     _ = try ui.widgets.text(state, self.add_component_button, "Add component", .{
         .height = .fill,
@@ -354,9 +354,9 @@ fn renderComponent(self: *Inspector, state: *ui.Ui, parent: ui.NodeId, component
         _ = try ui.widgets.text(state, body, "No editable properties", .{
             .width = .fill,
             .height = .{ .px = 24 },
-            .padding = .{ .top = state.centeredTextTop(24, 13) },
+            .padding = .{ .top = state.centeredTextTop(24, state.theme.font.tiny) },
             .color = .text_muted,
-            .size = 13,
+            .size = state.theme.font.tiny,
         });
     }
     try self.components.append(self.allocator, .{
@@ -434,16 +434,16 @@ fn addEmptyState(state: *ui.Ui, parent: ui.NodeId, has_scene: bool) !void {
     _ = try ui.widgets.text(state, card, if (has_scene) "Nothing selected" else "No scene loaded", .{
         .width = .fill,
         .height = .{ .px = 24 },
-        .padding = .{ .top = state.centeredTextTop(24, 15) },
+        .padding = .{ .top = state.centeredTextTop(24, state.theme.font.body) },
         .color = .text_dim,
-        .size = 15,
+        .size = state.theme.font.body,
     });
     _ = try ui.widgets.text(state, card, if (has_scene) "Select an entity in the Scene panel to inspect and edit it." else "Open a scene to inspect its entities.", .{
         .width = .fill,
         .height = .{ .px = 20 },
-        .padding = .{ .top = state.centeredTextTop(20, 13) },
+        .padding = .{ .top = state.centeredTextTop(20, state.theme.font.tiny) },
         .color = .text_muted,
-        .size = 13,
+        .size = state.theme.font.tiny,
     });
 }
 
