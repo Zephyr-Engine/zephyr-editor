@@ -1,4 +1,4 @@
-const scene = @import("zephyr_runtime").scene_schema;
+const scene = @import("fusion_runtime").scene_schema;
 
 pub const FlyCameraController = struct {
     look_sensitivity: f32 = 0.004,
@@ -9,7 +9,7 @@ pub const FlyCameraController = struct {
 
     pub const schema_meta = scene.SchemaMeta{
         .id = "8c1f2a70-3d5e-4b91-8f42-1a6b9c0d3e02",
-        .name = "zephyr.game.FlyCameraController",
+        .name = "fusion.game.FlyCameraController",
         .display_name = "Fly Camera Controller",
         .version = 1,
         .fields = &.{

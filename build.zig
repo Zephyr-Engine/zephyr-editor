@@ -4,11 +4,11 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const runtime_dep = b.dependency("zephyr_runtime", .{
+    const runtime_dep = b.dependency("fusion_runtime", .{
         .target = target,
         .optimize = optimize,
     });
-    const runtime_mod = runtime_dep.module("zephyr_runtime");
+    const runtime_mod = runtime_dep.module("fusion_runtime");
     const zimp_mod = runtime_dep.module("zimp");
     const zgui_dep = b.dependency("zGUI", .{
         .target = target,
@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .imports = &.{
-            .{ .name = "zephyr_runtime", .module = runtime_mod },
+            .{ .name = "fusion_runtime", .module = runtime_mod },
             .{ .name = "zimp", .module = zimp_mod },
             .{ .name = "zGUI", .module = zgui_mod },
             .{ .name = "zGUI_native", .module = zgui_native_mod },
@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const exe = b.addExecutable(.{
-        .name = "Zephyr Editor",
+        .name = "Fusion Editor",
         .root_module = editor_mod,
     });
 

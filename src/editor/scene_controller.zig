@@ -1,4 +1,4 @@
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 const zimp = @import("zimp");
 const std = @import("std");
 
@@ -8,7 +8,7 @@ const EditorPlayback = @import("../state/play_state.zig");
 const ProjectModel = @import("project_model.zig");
 const Game = @import("../game.zig");
 
-const Runtime = zp.Runtime(Game.definition);
+const Runtime = fusion.Runtime(Game.definition);
 
 const SceneController = @This();
 
@@ -22,7 +22,7 @@ runtime: *Runtime,
 playback: EditorPlayback,
 input_capture: SceneInputCapture = .{},
 active_scene: ?ActiveScene = null,
-selected_entity: ?zp.SceneEntityId = null,
+selected_entity: ?fusion.SceneEntityId = null,
 revision_number: u64 = 0,
 
 pub fn init(project: *ProjectModel, runtime: *Runtime) !SceneController {
@@ -60,8 +60,8 @@ pub fn openScene(self: *SceneController, path: []const u8) !void {
 
     try deactivateEditorCamera(&self.runtime.world.world, self.playback.editor_camera);
     try self.runtime.world.startScene(self.runtime.allocator, &self.runtime.assets, document);
-    self.playback.scene_camera = zp.activeCamera(&self.runtime.world.world) orelse self.playback.editor_camera;
-    try zp.setActiveCamera(&self.runtime.world.world, self.playback.editor_camera);
+    self.playback.scene_camera = fusion.activeCamera(&self.runtime.world.world) orelse self.playback.editor_camera;
+    try fusion.setActiveCamera(&self.runtime.world.world, self.playback.editor_camera);
 
     self.selected_entity = null;
     self.revision_number +%= 1;
@@ -95,11 +95,11 @@ pub fn isDirty(self: *const SceneController) bool {
     return false;
 }
 
-pub fn activeDocument(self: *SceneController) ?*zp.scene_schema.LoadedScene {
+pub fn activeDocument(self: *SceneController) ?*fusion.scene_schema.LoadedScene {
     return @constCast(self.runtime.world.activeSceneDocument());
 }
 
-pub fn componentSchema(self: *const SceneController, id: zp.ComponentTypeId) ?*const zimp.scene.ComponentSchema {
+pub fn componentSchema(self: *const SceneController, id: fusion.ComponentTypeId) ?*const zimp.scene.ComponentSchema {
     const codec = self.runtime.schemas.get(id) orelse return null;
     return &codec.schema;
 }
@@ -118,7 +118,7 @@ pub fn commitSceneMutation(self: *SceneController, mutation: SceneMutation) !voi
     }
 }
 
-pub fn selectEntity(self: *SceneController, entity: ?zp.SceneEntityId) void {
+pub fn selectEntity(self: *SceneController, entity: ?fusion.SceneEntityId) void {
     if (optionalEntityEql(self.selected_entity, entity)) {
         return;
     }
@@ -126,7 +126,7 @@ pub fn selectEntity(self: *SceneController, entity: ?zp.SceneEntityId) void {
     self.revision_number +%= 1;
 }
 
-pub fn selectedEntity(self: *const SceneController) ?zp.SceneEntityId {
+pub fn selectedEntity(self: *const SceneController) ?fusion.SceneEntityId {
     return self.selected_entity;
 }
 
@@ -174,23 +174,23 @@ fn transitionTo(self: *SceneController, state: EditorPlayback.PlayState) !void {
 }
 
 fn executeTransition(self: *SceneController, state: EditorPlayback.PlayState) !void {
-    const camera: zp.EntityID = switch (state) {
+    const camera: fusion.EntityID = switch (state) {
         .Play => self.playback.scene_camera,
         .Pause => self.playback.editor_camera,
         .Stop => blk: {
             try self.runtime.world.resetActiveScene();
-            self.playback.scene_camera = zp.activeCamera(&self.runtime.world.world) orelse return error.NoActiveCamera;
+            self.playback.scene_camera = fusion.activeCamera(&self.runtime.world.world) orelse return error.NoActiveCamera;
             self.selected_entity = null;
             break :blk self.playback.editor_camera;
         },
     };
 
-    try zp.setActiveCamera(&self.runtime.world.world, camera);
-    self.runtime.world.getResource(zp.Input).clear();
+    try fusion.setActiveCamera(&self.runtime.world.world, camera);
+    self.runtime.world.getResource(fusion.Input).clear();
     self.input_capture.reset();
 }
 
-fn optionalEntityEql(a: ?zp.SceneEntityId, b: ?zp.SceneEntityId) bool {
+fn optionalEntityEql(a: ?fusion.SceneEntityId, b: ?fusion.SceneEntityId) bool {
     if (a) |left| {
         if (b) |right| {
             return left.eql(right);
@@ -200,34 +200,34 @@ fn optionalEntityEql(a: ?zp.SceneEntityId, b: ?zp.SceneEntityId) bool {
     return b == null;
 }
 
-fn deactivateEditorCamera(world: *zp.EcsWorld, editor_camera: zp.EntityID) !void {
-    if (world.hasComponent(editor_camera, zp.ActiveCamera)) {
-        try world.removeComponent(editor_camera, zp.ActiveCamera);
+fn deactivateEditorCamera(world: *fusion.EcsWorld, editor_camera: fusion.EntityID) !void {
+    if (world.hasComponent(editor_camera, fusion.ActiveCamera)) {
+        try world.removeComponent(editor_camera, fusion.ActiveCamera);
     }
 }
 
 test "opening a scene removes the persistent editor camera active marker" {
-    var world = zp.EcsWorld.init(std.testing.allocator);
+    var world = fusion.EcsWorld.init(std.testing.allocator);
     defer world.deinit();
-    inline for (.{ zp.components.TransformComponent, zp.components.CameraComponent, zp.ActiveCamera }) |Component| {
+    inline for (.{ fusion.components.TransformComponent, fusion.components.CameraComponent, fusion.ActiveCamera }) |Component| {
         _ = try world.registerType(Component, .{ .schema_hash = 0 });
     }
 
     const editor_camera = try world.spawnWith(.{
-        zp.components.TransformComponent{},
-        zp.components.CameraComponent{},
+        fusion.components.TransformComponent{},
+        fusion.components.CameraComponent{},
     });
     const scene_camera = try world.spawnWith(.{
-        zp.components.TransformComponent{},
-        zp.components.CameraComponent{},
+        fusion.components.TransformComponent{},
+        fusion.components.CameraComponent{},
     });
-    try zp.setActiveCamera(&world, editor_camera);
+    try fusion.setActiveCamera(&world, editor_camera);
 
     // Scene deserialization can add this marker directly, before the editor
     // gets the chance to switch active cameras back to its own camera.
-    try world.addComponent(scene_camera, zp.ActiveCamera, .{});
+    try world.addComponent(scene_camera, fusion.ActiveCamera, .{});
     try deactivateEditorCamera(&world, editor_camera);
 
-    try std.testing.expect(!world.hasComponent(editor_camera, zp.ActiveCamera));
-    try std.testing.expectEqual(scene_camera, zp.activeCamera(&world).?);
+    try std.testing.expect(!world.hasComponent(editor_camera, fusion.ActiveCamera));
+    try std.testing.expectEqual(scene_camera, fusion.activeCamera(&world).?);
 }

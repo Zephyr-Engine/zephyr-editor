@@ -40,7 +40,7 @@ const rose = ui.Color.rgba(223, 152, 152, 255); // #df9898
 const sage = ui.Color.rgba(140, 205, 160, 255); // #8ccda0
 
 pub fn theme() ui.Theme {
-    var value = ui.theme.zephyr_dark;
+    var value = ui.theme.fusion_dark;
 
     // Elevation ascends app -> control. `shell` carries the docked panels and is
     // the surface the eye spends most time on, so it sits on the reference plate.
@@ -138,9 +138,9 @@ fn luma(c: ui.Color) u32 {
 
 test "editor theme stays denser than the zGUI default" {
     const value = theme();
-    try std.testing.expect(value.radius_tokens.card < ui.theme.zephyr_dark.radius_tokens.card);
-    try std.testing.expect(value.metrics.control_height < ui.theme.zephyr_dark.metrics.control_height);
-    try std.testing.expect(value.space.sm < ui.theme.zephyr_dark.space.sm);
+    try std.testing.expect(value.radius_tokens.card < ui.theme.fusion_dark.radius_tokens.card);
+    try std.testing.expect(value.metrics.control_height < ui.theme.fusion_dark.metrics.control_height);
+    try std.testing.expect(value.space.sm < ui.theme.fusion_dark.space.sm);
 }
 
 test "violet is the primary accent" {
@@ -184,7 +184,7 @@ test "surface elevation ascends and wells sit below the plates" {
 
 test "corners stay gently rounded" {
     const value = theme();
-    const d = ui.theme.zephyr_dark.radius_tokens;
+    const d = ui.theme.fusion_dark.radius_tokens;
     try std.testing.expect(value.radius_tokens.control <= d.control);
     try std.testing.expect(value.radius_tokens.card <= d.card);
     try std.testing.expect(value.radius_tokens.viewport <= d.viewport);

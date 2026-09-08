@@ -1,10 +1,10 @@
 const std = @import("std");
 const ui = @import("zGUI");
 const zimp = @import("zimp");
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 
-const camera_component_id = zp.ComponentTypeId.parseComptime(zp.components.CameraComponent.schema_meta.id);
-const mesh_component_id = zp.ComponentTypeId.parseComptime(zp.components.MeshRenderComponent.schema_meta.id);
+const camera_component_id = fusion.ComponentTypeId.parseComptime(fusion.components.CameraComponent.schema_meta.id);
+const mesh_component_id = fusion.ComponentTypeId.parseComptime(fusion.components.MeshRenderComponent.schema_meta.id);
 
 pub const SceneEntityRow = struct {
     pub const Icons = struct {
@@ -13,7 +13,7 @@ pub const SceneEntityRow = struct {
     };
 
     node: ui.NodeId,
-    entity_id: zp.SceneEntityId,
+    entity_id: fusion.SceneEntityId,
 
     pub fn init(
         state: *ui.Ui,

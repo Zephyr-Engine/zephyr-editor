@@ -1,17 +1,17 @@
-# Zephyr Editor
-The actual editor of Zephyr. 
+# Fusion Editor
+The actual editor of Fusion.
 
 ## Usage
 ```bash
-mkdir zephyr
+mkdir fusion
 
-cd zephyr
-git clone git@github.com:Zephyr-Engine/zephyr-runtime.git
-git clone git@github.com:Zephyr-Engine/zephyr-editor.git
+cd fusion
+git clone git@github.com:Fusion-Engine/fusion-runtime.git
+git clone git@github.com:Fusion-Engine/fusion-editor.git
 
 mkdir game
 
-cd zephyr-editor
+cd fusion-editor
 zig build run -- create ../game
 zig build run -- open ../game
 ```

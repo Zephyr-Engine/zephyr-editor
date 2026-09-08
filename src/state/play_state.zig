@@ -1,4 +1,4 @@
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 
 const components = @import("../editor_components.zig");
 const log = @import("../utilities/log.zig");
@@ -6,19 +6,19 @@ const log = @import("../utilities/log.zig");
 const EditorPlayback = @This();
 
 play_state: PlayState = .Stop,
-editor_camera: zp.EntityID,
-scene_camera: zp.EntityID,
+editor_camera: fusion.EntityID,
+scene_camera: fusion.EntityID,
 
-pub fn init(world: *zp.World) !EditorPlayback {
-    const active_scene_camera = zp.activeCamera(&world.world);
+pub fn init(world: *fusion.World) !EditorPlayback {
+    const active_scene_camera = fusion.activeCamera(&world.world);
 
     // default editor camera to the active scene camera
-    const editor_transform: zp.components.TransformComponent = if (active_scene_camera) |entity|
-        world.world.getComponent(entity, zp.components.TransformComponent).?.*
+    const editor_transform: fusion.components.TransformComponent = if (active_scene_camera) |entity|
+        world.world.getComponent(entity, fusion.components.TransformComponent).?.*
     else
         .{};
-    const editor_camera_component: zp.components.CameraComponent = if (active_scene_camera) |entity|
-        world.world.getComponent(entity, zp.components.CameraComponent).?.*
+    const editor_camera_component: fusion.components.CameraComponent = if (active_scene_camera) |entity|
+        world.world.getComponent(entity, fusion.components.CameraComponent).?.*
     else
         .{};
 
@@ -33,7 +33,7 @@ pub fn init(world: *zp.World) !EditorPlayback {
     };
     errdefer world.world.despawn(editor_camera);
 
-    try zp.setActiveCamera(&world.world, editor_camera);
+    try fusion.setActiveCamera(&world.world, editor_camera);
 
     return .{
         .editor_camera = editor_camera,

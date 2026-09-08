@@ -1,6 +1,6 @@
 const std = @import("std");
 const ui = @import("zGUI");
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 
 pub const ViewportStats = struct {
     card: ui.NodeId,
@@ -45,7 +45,7 @@ pub const ViewportStats = struct {
         return .{ .card = card, .label = label };
     }
 
-    pub fn update(self: *ViewportStats, state: *ui.Ui, snapshot: ?zp.DebugStats) !void {
+    pub fn update(self: *ViewportStats, state: *ui.Ui, snapshot: ?fusion.DebugStats) !void {
         const stats = snapshot orelse {
             if (self.visible) {
                 try state.setVisible(self.card, false);

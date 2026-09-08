@@ -1,6 +1,6 @@
 const std = @import("std");
 const ui = @import("zGUI");
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 
 const actions = @import("../editor/actions.zig");
 const hash = @import("../utilities/hash.zig");
@@ -22,7 +22,7 @@ pub const Services = struct {
 };
 
 pub const Frame = struct {
-    debug_stats: ?zp.DebugStats = null,
+    debug_stats: ?fusion.DebugStats = null,
 };
 
 pub const Instance = struct {

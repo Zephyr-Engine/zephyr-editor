@@ -1,5 +1,5 @@
 const native_ui = @import("zGUI_native");
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 const ui = @import("zGUI");
 const std = @import("std");
 
@@ -15,11 +15,11 @@ const log = @import("../utilities/log.zig");
 const actions = @import("actions.zig");
 const Game = @import("../game.zig");
 
-const Runtime = zp.Runtime(Game.definition);
+const Runtime = fusion.Runtime(Game.definition);
 pub const EditorApplication = @This();
 
 project: ProjectState,
-app: *zp.Application(Game.definition),
+app: *fusion.Application(Game.definition),
 io: std.Io,
 allocator: std.mem.Allocator,
 
@@ -27,11 +27,11 @@ pub fn init(allocator: std.mem.Allocator, io: std.Io, root_path: []const u8) !Ed
     var project = try ProjectState.init(allocator, io, root_path);
     errdefer project.deinit(allocator, io);
 
-    const App = zp.Application(Game.definition);
+    const App = fusion.Application(Game.definition);
     const app = try App.init(allocator, io, .{
         .width = null,
         .height = null,
-        .title = "Zephyr Editor",
+        .title = "Fusion Editor",
     }, project.project);
 
     return .{
@@ -64,7 +64,7 @@ pub fn run(self: *EditorApplication) !void {
 
     var native_menu_context = NativeMenuContext{ .registry = editor_context.actionRegistry(), .window = app.window };
     const window_handle = try app.window.nativeMenuWindowHandle();
-    var native_menu = try native_ui.NativeMenu.init(window_handle, "Zephyr Editor", &native_menu_context, nativeMenuAction);
+    var native_menu = try native_ui.NativeMenu.init(window_handle, "Fusion Editor", &native_menu_context, nativeMenuAction);
     defer native_menu.deinit();
 
     const file = try native_menu.addMenu("File");
@@ -72,7 +72,7 @@ pub fn run(self: *EditorApplication) !void {
     try native_menu.addItem(file, "Open Project", actions.ids.open_project);
     try native_menu.addItem(file, "Save", actions.ids.save_project);
 
-    var ui_renderer = try ui.OpenGlRenderer.init(self.allocator, zp.Window.getProcAddress);
+    var ui_renderer = try ui.OpenGlRenderer.init(self.allocator, fusion.Window.getProcAddress);
     defer ui_renderer.deinit();
 
     const font_bytes = @embedFile("../resources/fonts/Inter-Regular.ttf");
@@ -209,7 +209,7 @@ fn switchProject(
 
 const NativeMenuContext = struct {
     registry: *actions.Registry,
-    window: *zp.Window,
+    window: *fusion.Window,
 };
 
 fn nativeMenuAction(context: ?*anyopaque, action: native_ui.ActionId) callconv(.c) void {

@@ -1,26 +1,26 @@
 const std = @import("std");
 
 const editor_components = @import("editor_components.zig");
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 
 pub const max_pitch: f32 = std.math.pi / 2.0 - 0.02;
 
-pub fn updateActive(world: *zp.EcsWorld, input: *const zp.Input) void {
-    const entity = zp.activeCamera(world) orelse return;
-    const transform = world.getComponent(entity, zp.components.TransformComponent) orelse return;
+pub fn updateActive(world: *fusion.EcsWorld, input: *const fusion.Input) void {
+    const entity = fusion.activeCamera(world) orelse return;
+    const transform = world.getComponent(entity, fusion.components.TransformComponent) orelse return;
     const controller = world.getComponent(entity, editor_components.FlyCameraController) orelse return;
     update(transform, controller, input);
 }
 
-pub fn updateActiveSystem(world: *zp.EcsWorld, commands: *zp.CommandBuffer) !void {
+pub fn updateActiveSystem(world: *fusion.EcsWorld, commands: *fusion.CommandBuffer) !void {
     std.debug.assert(commands.world == world);
-    updateActive(world, world.getResource(zp.Input));
+    updateActive(world, world.getResource(fusion.Input));
 }
 
 pub fn update(
-    transform: *zp.components.TransformComponent,
+    transform: *fusion.components.TransformComponent,
     controller: *editor_components.FlyCameraController,
-    input: *const zp.Input,
+    input: *const fusion.Input,
 ) void {
     const delta = input.mouse_delta;
 
@@ -48,15 +48,15 @@ pub fn update(
     }
 }
 
-fn orientation(yaw: f32, pitch: f32) zp.Quat {
-    const yaw_rotation = zp.Quat.fromAxisAngle(zp.Vec3.new(0, 1, 0), yaw);
-    const pitch_rotation = zp.Quat.fromAxisAngle(zp.Vec3.new(1, 0, 0), pitch);
+fn orientation(yaw: f32, pitch: f32) fusion.Quat {
+    const yaw_rotation = fusion.Quat.fromAxisAngle(fusion.Vec3.new(0, 1, 0), yaw);
+    const pitch_rotation = fusion.Quat.fromAxisAngle(fusion.Vec3.new(1, 0, 0), pitch);
     return yaw_rotation.mul(pitch_rotation);
 }
 
 test "editor camera orientation uses controller yaw and pitch" {
     const rotation = orientation(std.math.pi / 2.0, 0);
-    const forward = rotation.rotateVec3(zp.Vec3.new(0, 0, -1));
+    const forward = rotation.rotateVec3(fusion.Vec3.new(0, 0, -1));
 
     try std.testing.expectApproxEqAbs(@as(f32, -1), forward.x, 0.0001);
     try std.testing.expectApproxEqAbs(@as(f32, 0), forward.y, 0.0001);
@@ -64,9 +64,9 @@ test "editor camera orientation uses controller yaw and pitch" {
 }
 
 test "editor camera clamps look pitch and applies scroll zoom" {
-    var transform: zp.components.TransformComponent = .{};
+    var transform: fusion.components.TransformComponent = .{};
     var controller: editor_components.FlyCameraController = .{};
-    var input: zp.Input = .{};
+    var input: fusion.Input = .{};
 
     input.applyEvent(.{ .MousePressed = .Right });
     input.applyEvent(.{ .MouseMove = .{ .x = 0, .y = 0 } });

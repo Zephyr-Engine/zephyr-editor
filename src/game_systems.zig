@@ -1,21 +1,21 @@
 const std = @import("std");
 
 const game_components = @import("game_components.zig");
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 
 const KeyboardMovementComponent = game_components.KeyboardMovementComponent;
-const TransformComponent = zp.components.TransformComponent;
-const Vec3 = zp.Vec3;
+const TransformComponent = fusion.components.TransformComponent;
+const Vec3 = fusion.Vec3;
 
-pub fn keyboardMovementSystem(world: *zp.EcsWorld, commands: *zp.CommandBuffer) !void {
+pub fn keyboardMovementSystem(world: *fusion.EcsWorld, commands: *fusion.CommandBuffer) !void {
     std.debug.assert(commands.world == world);
-    const input = world.getResource(zp.Input);
+    const input = world.getResource(fusion.Input);
     const direction = keyboardDirection(input);
     if (direction.x == 0 and direction.z == 0) {
         return;
     }
 
-    const delta_time = world.getResource(zp.DeltaTime).seconds;
+    const delta_time = world.getResource(fusion.DeltaTime).seconds;
     var iter = world.query(.{
         .write = &.{TransformComponent},
         .read = &.{KeyboardMovementComponent},
@@ -31,14 +31,14 @@ pub fn keyboardMovementSystem(world: *zp.EcsWorld, commands: *zp.CommandBuffer) 
             1.0;
         const movement = direction.normalize().scale(speed * delta_time);
         transform.position = transform.position.add(movement);
-        transform.rotation = zp.Quat.fromAxisAngle(
+        transform.rotation = fusion.Quat.fromAxisAngle(
             Vec3.new(0, 1, 0),
             std.math.atan2(-movement.x, -movement.z),
         );
     }
 }
 
-fn keyboardDirection(input: *const zp.Input) Vec3 {
+fn keyboardDirection(input: *const fusion.Input) Vec3 {
     var direction = Vec3.zero;
 
     if (input.isKeyDown(.W) or input.isKeyDown(.Up)) direction.z -= 1;
@@ -51,8 +51,8 @@ fn keyboardDirection(input: *const zp.Input) Vec3 {
 
 const testing = std.testing;
 
-fn inputWithKeysDown(keys: []const zp.Key) zp.Input {
-    var input: zp.Input = .{};
+fn inputWithKeysDown(keys: []const fusion.Key) fusion.Input {
+    var input: fusion.Input = .{};
     for (keys) |key| {
         input.applyEvent(.{ .KeyPressed = key });
     }
@@ -60,7 +60,7 @@ fn inputWithKeysDown(keys: []const zp.Key) zp.Input {
 }
 
 test "keyboardDirection is zero with no keys held" {
-    const input: zp.Input = .{};
+    const input: fusion.Input = .{};
     const direction = keyboardDirection(&input);
 
     try testing.expectEqual(@as(f32, 0), direction.x);
@@ -96,19 +96,19 @@ test "keyboardDirection cancels opposing keys" {
 }
 
 test "keyboard movement system applies delta time and sprint speed to matching entities" {
-    var world = zp.EcsWorld.init(testing.allocator);
+    var world = fusion.EcsWorld.init(testing.allocator);
     defer world.deinit();
     _ = try world.registerType(TransformComponent, .{ .schema_hash = 0 });
     _ = try world.registerType(KeyboardMovementComponent, .{ .schema_hash = 0 });
-    try world.setResource(zp.Input, inputWithKeysDown(&.{ .W, .LeftShift }));
-    try world.setResource(zp.DeltaTime, .{ .seconds = 1 });
+    try world.setResource(fusion.Input, inputWithKeysDown(&.{ .W, .LeftShift }));
+    try world.setResource(fusion.DeltaTime, .{ .seconds = 1 });
 
     const moving = try world.spawnWith(.{
         TransformComponent{},
         KeyboardMovementComponent{},
     });
     const stationary = try world.spawnWith(.{TransformComponent{}});
-    var commands = zp.CommandBuffer.init(&world);
+    var commands = fusion.CommandBuffer.init(&world);
     defer commands.deinit();
 
     try keyboardMovementSystem(&world, &commands);

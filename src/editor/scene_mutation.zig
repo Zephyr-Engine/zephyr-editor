@@ -1,9 +1,9 @@
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 const zimp = @import("zimp");
 const std = @import("std");
 
 const SceneComponent = zimp.scene.SceneComponent;
-const LoadedScene = zp.scene_schema.LoadedScene;
+const LoadedScene = fusion.scene_schema.LoadedScene;
 const SceneDocument = zimp.scene.SceneDocument;
 const ComponentTypeId = zimp.ComponentTypeId;
 const SceneEntity = zimp.scene.SceneEntity;
@@ -443,9 +443,9 @@ const ExtraMutationComponent = struct {
 
 const component_id = ComponentTypeId.parseComptime(MutationComponent.schema_meta.id);
 const extra_component_id = ComponentTypeId.parseComptime(ExtraMutationComponent.schema_meta.id);
-const transform_component_id = ComponentTypeId.parseComptime(zp.components.TransformComponent.schema_meta.id);
-const camera_component_id = ComponentTypeId.parseComptime(zp.components.CameraComponent.schema_meta.id);
-const active_camera_component_id = ComponentTypeId.parseComptime(zp.components.ActiveCamera.schema_meta.id);
+const transform_component_id = ComponentTypeId.parseComptime(fusion.components.TransformComponent.schema_meta.id);
+const camera_component_id = ComponentTypeId.parseComptime(fusion.components.CameraComponent.schema_meta.id);
+const active_camera_component_id = ComponentTypeId.parseComptime(fusion.components.ActiveCamera.schema_meta.id);
 
 fn testDocument() !SceneDocument {
     var scene = try SceneDocument.init(testing.allocator, test_scene_id, test_project_id, "Mutation test");
@@ -480,17 +480,17 @@ fn applyToClone(source: *const SceneDocument, mutation: Mutation) !SceneDocument
 }
 
 fn applyToDocument(document: *SceneDocument, mutation: Mutation) !void {
-    var world = zp.EcsWorld.init(testing.allocator);
+    var world = fusion.EcsWorld.init(testing.allocator);
     defer world.deinit();
-    inline for (.{ MutationComponent, ExtraMutationComponent, zp.components.TransformComponent, zp.components.CameraComponent, zp.components.ActiveCamera }) |Component| {
+    inline for (.{ MutationComponent, ExtraMutationComponent, fusion.components.TransformComponent, fusion.components.CameraComponent, fusion.components.ActiveCamera }) |Component| {
         _ = try world.registerType(Component, .{ .schema_hash = 0 });
     }
-    var registry = zp.scene_schema.SchemaRegistry.init(testing.allocator);
+    var registry = fusion.scene_schema.SchemaRegistry.init(testing.allocator);
     defer registry.deinit();
-    inline for (.{ MutationComponent, ExtraMutationComponent, zp.components.TransformComponent, zp.components.CameraComponent, zp.components.ActiveCamera }) |Component| {
+    inline for (.{ MutationComponent, ExtraMutationComponent, fusion.components.TransformComponent, fusion.components.CameraComponent, fusion.components.ActiveCamera }) |Component| {
         try registry.register(Component);
     }
-    var assets: zp.AssetManager = undefined;
+    var assets: fusion.AssetManager = undefined;
     var scene = try LoadedScene.init(testing.allocator, document.*, &registry, &assets, &world);
     errdefer scene.instance.deinit(&world);
     try scene.start();

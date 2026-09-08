@@ -1,6 +1,6 @@
 const std = @import("std");
 const zimp = @import("zimp");
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 
 const ProjectModel = @This();
 
@@ -27,10 +27,10 @@ pub const Listing = struct {
 
 allocator: std.mem.Allocator,
 io: std.Io,
-project: *const zp.Project,
+project: *const fusion.Project,
 generation: u64 = 0,
 
-pub fn init(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project) ProjectModel {
+pub fn init(allocator: std.mem.Allocator, io: std.Io, project: *const fusion.Project) ProjectModel {
     return .{
         .allocator = allocator,
         .io = io,
@@ -38,7 +38,7 @@ pub fn init(allocator: std.mem.Allocator, io: std.Io, project: *const zp.Project
     };
 }
 
-pub fn rebind(self: *ProjectModel, project: *const zp.Project) void {
+pub fn rebind(self: *ProjectModel, project: *const fusion.Project) void {
     self.project = project;
     self.generation +%= 1;
 }
@@ -112,7 +112,7 @@ test "directory listings own paths and distinguish files from folders" {
     try tmp.dir.createDirPath(std.testing.io, "assets/models");
     try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "assets/readme.txt", .data = "asset" });
 
-    const project = zp.Project{
+    const project = fusion.Project{
         .manifest = .{
             .name = "Test",
             .project_id = .parseComptime("bf5a424f-e93e-4977-9a7a-0c522318dfdc"),
@@ -138,7 +138,7 @@ test "directory listings expose roots and treat missing folders as empty" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const project = zp.Project{
+    const project = fusion.Project{
         .manifest = .{
             .name = "Test",
             .project_id = .parseComptime("addf9ad5-9d5d-44d6-8590-7be77e487892"),

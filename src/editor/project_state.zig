@@ -1,17 +1,17 @@
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 const zimp = @import("zimp");
 const std = @import("std");
 
 const ProjectState = @This();
 
-project: *zp.Project,
+project: *fusion.Project,
 watch_handle: *zimp.WatchHandle,
 
 pub fn init(allocator: std.mem.Allocator, io: std.Io, root_path: []const u8) !ProjectState {
-    const project = try allocator.create(zp.Project);
+    const project = try allocator.create(fusion.Project);
     errdefer allocator.destroy(project);
 
-    project.* = try zp.openProject(allocator, io, .{ .root_path = root_path });
+    project.* = try fusion.openProject(allocator, io, .{ .root_path = root_path });
     errdefer project.deinit(allocator, io);
 
     const watch_handle = try project.watchAssets(allocator, io);

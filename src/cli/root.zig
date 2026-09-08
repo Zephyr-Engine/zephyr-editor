@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const default_project_name = "Zephyr Game Example";
+const default_project_name = "Fusion Game Example";
 
 pub const Options = struct {
     root_path: []const u8 = ".",
@@ -46,29 +46,29 @@ pub fn absoluteProjectRoot(allocator: std.mem.Allocator, io: std.Io, root: []con
 const testing = std.testing;
 
 test "parse rejects a missing project path" {
-    try testing.expectError(error.MissingProjectPath, parse(&.{"zephyr-editor"}));
+    try testing.expectError(error.MissingProjectPath, parse(&.{"fusion-editor"}));
 }
 
 test "parse create command selects create mode" {
-    const options = try parse(&.{ "zephyr-editor", "create", "/tmp/project" });
+    const options = try parse(&.{ "fusion-editor", "create", "/tmp/project" });
 
     try testing.expectEqualStrings("/tmp/project", options.root_path);
     try testing.expect(options.create_project);
 }
 
 test "parse open command selects open mode" {
-    const options = try parse(&.{ "zephyr-editor", "open", "/tmp/project" });
+    const options = try parse(&.{ "fusion-editor", "open", "/tmp/project" });
 
     try testing.expectEqualStrings("/tmp/project", options.root_path);
     try testing.expect(!options.create_project);
 }
 
 test "parse rejects commands without a project path" {
-    try testing.expectError(error.MissingProjectPath, parse(&.{ "zephyr-editor", "create" }));
-    try testing.expectError(error.MissingProjectPath, parse(&.{ "zephyr-editor", "open" }));
+    try testing.expectError(error.MissingProjectPath, parse(&.{ "fusion-editor", "create" }));
+    try testing.expectError(error.MissingProjectPath, parse(&.{ "fusion-editor", "open" }));
 }
 
 test "parse rejects unknown arguments" {
-    try testing.expectError(error.UnknownArgument, parse(&.{ "zephyr-editor", "wat" }));
-    try testing.expectError(error.UnknownArgument, parse(&.{ "zephyr-editor", "open", "/tmp/project", "extra" }));
+    try testing.expectError(error.UnknownArgument, parse(&.{ "fusion-editor", "wat" }));
+    try testing.expectError(error.UnknownArgument, parse(&.{ "fusion-editor", "open", "/tmp/project", "extra" }));
 }

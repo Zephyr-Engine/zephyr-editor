@@ -1,6 +1,6 @@
 const std = @import("std");
 const ui = @import("zGUI");
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 
 pub const PixelSize = struct {
     width: u32,
@@ -8,7 +8,7 @@ pub const PixelSize = struct {
 };
 
 pub const BeginFrameInput = struct {
-    window: *zp.Window,
+    window: *fusion.Window,
     framebuffer_size: PixelSize,
     window_size: ui.Vec2,
     ui_scale: f32 = 1,
@@ -53,7 +53,7 @@ pub fn deinit(self: *Backend) void {
     self.* = undefined;
 }
 
-pub fn beginFrame(self: *Backend, input: BeginFrameInput, runtime_events: []const zp.ZEvent) !Frame {
+pub fn beginFrame(self: *Backend, input: BeginFrameInput, runtime_events: []const fusion.ZEvent) !Frame {
     const frame = Frame{
         .events = try self.translateEvents(runtime_events, input.ui_scale),
         .window_size = input.window_size,
@@ -72,7 +72,7 @@ pub fn beginFrame(self: *Backend, input: BeginFrameInput, runtime_events: []cons
     return frame;
 }
 
-fn translateEvents(self: *Backend, runtime_events: []const zp.ZEvent, ui_scale: f32) ![]const ui.PlatformEvent {
+fn translateEvents(self: *Backend, runtime_events: []const fusion.ZEvent, ui_scale: f32) ![]const ui.PlatformEvent {
     self.events.clearRetainingCapacity();
     self.text_buffer.clearRetainingCapacity();
 
@@ -91,7 +91,7 @@ fn translateEvents(self: *Backend, runtime_events: []const zp.ZEvent, ui_scale: 
     return self.events.items;
 }
 
-fn toPlatformEvent(self: *Backend, event: zp.ZEvent, ui_scale: f32) !?ui.PlatformEvent {
+fn toPlatformEvent(self: *Backend, event: fusion.ZEvent, ui_scale: f32) !?ui.PlatformEvent {
     return switch (event) {
         .MouseMove => |pos| .{ .mouse_move = .{ .x = pos.x / ui_scale, .y = pos.y / ui_scale } },
         .MousePressed => |button| .{ .mouse_down = mapMouseButton(button) orelse return null },
@@ -115,7 +115,7 @@ fn textInputEvent(self: *Backend, codepoint: u32) !?ui.PlatformEvent {
     return .{ .text_input = self.text_buffer.items[start .. start + len] };
 }
 
-pub fn setCursor(window: *zp.Window, cursor: ui.CursorKind) void {
+pub fn setCursor(window: *fusion.Window, cursor: ui.CursorKind) void {
     switch (cursor) {
         .arrow => window.setCursor(.arrow),
         .hand => window.setCursor(.hand),
@@ -126,11 +126,11 @@ pub fn setCursor(window: *zp.Window, cursor: ui.CursorKind) void {
     }
 }
 
-pub fn toUiSize(size: zp.Window.WindowSize, ui_scale: f32) ui.Vec2 {
+pub fn toUiSize(size: fusion.Window.WindowSize, ui_scale: f32) ui.Vec2 {
     return .{ .x = @as(f32, @floatFromInt(size.width)) / ui_scale, .y = @as(f32, @floatFromInt(size.height)) / ui_scale };
 }
 
-pub fn toPixelSize(size: zp.Window.WindowSize) PixelSize {
+pub fn toPixelSize(size: fusion.Window.WindowSize) PixelSize {
     return .{ .width = size.width, .height = size.height };
 }
 
@@ -149,7 +149,7 @@ fn framebufferScale(window_size: ui.Vec2, framebuffer_size: PixelSize) f32 {
     return @max(0.25, @max(x, y));
 }
 
-fn mapMouseButton(button: zp.MouseButton) ?ui.MouseButton {
+fn mapMouseButton(button: fusion.MouseButton) ?ui.MouseButton {
     return switch (button) {
         .Left => .left,
         .Right => .right,
@@ -158,19 +158,19 @@ fn mapMouseButton(button: zp.MouseButton) ?ui.MouseButton {
     };
 }
 
-fn mapKey(key: zp.Key) ui.Key {
+fn mapKey(key: fusion.Key) ui.Key {
     const value = @intFromEnum(key);
-    if (value >= @intFromEnum(zp.Key.Num0) and value <= @intFromEnum(zp.Key.Num9)) {
-        return @enumFromInt(@intFromEnum(ui.Key.num_0) + value - @intFromEnum(zp.Key.Num0));
+    if (value >= @intFromEnum(fusion.Key.Num0) and value <= @intFromEnum(fusion.Key.Num9)) {
+        return @enumFromInt(@intFromEnum(ui.Key.num_0) + value - @intFromEnum(fusion.Key.Num0));
     }
-    if (value >= @intFromEnum(zp.Key.A) and value <= @intFromEnum(zp.Key.Z)) {
-        return @enumFromInt(@intFromEnum(ui.Key.a) + value - @intFromEnum(zp.Key.A));
+    if (value >= @intFromEnum(fusion.Key.A) and value <= @intFromEnum(fusion.Key.Z)) {
+        return @enumFromInt(@intFromEnum(ui.Key.a) + value - @intFromEnum(fusion.Key.A));
     }
-    if (value >= @intFromEnum(zp.Key.F1) and value <= @intFromEnum(zp.Key.F25)) {
-        return @enumFromInt(@intFromEnum(ui.Key.f1) + value - @intFromEnum(zp.Key.F1));
+    if (value >= @intFromEnum(fusion.Key.F1) and value <= @intFromEnum(fusion.Key.F25)) {
+        return @enumFromInt(@intFromEnum(ui.Key.f1) + value - @intFromEnum(fusion.Key.F1));
     }
-    if (value >= @intFromEnum(zp.Key.Kp0) and value <= @intFromEnum(zp.Key.Kp9)) {
-        return @enumFromInt(@intFromEnum(ui.Key.kp_0) + value - @intFromEnum(zp.Key.Kp0));
+    if (value >= @intFromEnum(fusion.Key.Kp0) and value <= @intFromEnum(fusion.Key.Kp9)) {
+        return @enumFromInt(@intFromEnum(ui.Key.kp_0) + value - @intFromEnum(fusion.Key.Kp0));
     }
     return switch (key) {
         .Space => .space,
@@ -226,16 +226,16 @@ fn mapKey(key: zp.Key) ui.Key {
     };
 }
 
-fn clipboardFor(window: *zp.Window) ui.Clipboard {
+fn clipboardFor(window: *fusion.Window) ui.Clipboard {
     return .{ .context = window, .read_fn = clipboardRead, .write_fn = clipboardWrite };
 }
 
 fn clipboardRead(context: ?*anyopaque) []const u8 {
-    const window: *zp.Window = @ptrCast(@alignCast(context orelse return ""));
+    const window: *fusion.Window = @ptrCast(@alignCast(context orelse return ""));
     return window.getClipboard();
 }
 
 fn clipboardWrite(context: ?*anyopaque, text: []const u8) void {
-    const window: *zp.Window = @ptrCast(@alignCast(context orelse return));
+    const window: *fusion.Window = @ptrCast(@alignCast(context orelse return));
     window.setClipboard(text);
 }

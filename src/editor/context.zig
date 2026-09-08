@@ -1,4 +1,4 @@
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 const std = @import("std");
 
 const createProject = @import("../actions/root.zig").createProject;
@@ -9,7 +9,7 @@ const ProjectModel = @import("project_model.zig");
 const action_mod = @import("actions.zig");
 const Game = @import("../game.zig");
 
-const Runtime = zp.Runtime(Game.definition);
+const Runtime = fusion.Runtime(Game.definition);
 const EditorContext = @This();
 
 pub const Command = union(enum) {
@@ -26,7 +26,7 @@ pending_command: ?Command = null,
 pub fn create(
     allocator: std.mem.Allocator,
     io: std.Io,
-    project: *const zp.Project,
+    project: *const fusion.Project,
     runtime: *Runtime,
 ) !*EditorContext {
     const context = try allocator.create(EditorContext);
@@ -53,7 +53,7 @@ pub fn destroy(self: *EditorContext) void {
     allocator.destroy(self);
 }
 
-pub fn rebind(self: *EditorContext, project: *const zp.Project, runtime: *Runtime, playback: EditorPlayback) void {
+pub fn rebind(self: *EditorContext, project: *const fusion.Project, runtime: *Runtime, playback: EditorPlayback) void {
     self.project.rebind(project);
     self.scene.rebind(runtime, playback);
 }

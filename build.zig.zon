@@ -1,15 +1,15 @@
 .{
-    .name = .zephyr_sandbox,
+    .name = .fusion_sandbox,
     .version = "0.0.0",
-    .fingerprint = 0x17eb05afbd037c12, // Changing this has security and trust implications.
+    .fingerprint = 0x39ff43ce87ab0faf,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .zephyr_runtime = .{
-            .path = "../zephyr-runtime",
+        .fusion_runtime = .{
+            .path = "../fusion-runtime",
         },
         .zGUI = .{
-            .url = "git+https://github.com/Zephyr-Engine/zGUI.git?ref=modern#d2c7ea66c9ad8853374fa85313eb48de0d066100",
-            .hash = "zGUI-0.0.0-LDuKkSajEABb69NMjOo7M8yIHxJjpnTyPqPw0IGK7oAR",
+            .url = "git+https://github.com/Fusion-Engine-Labs/zGUI.git?ref=modern#5d32b21a186268380478a168fc2080645754b223",
+            .hash = "zGUI-0.0.0-LDuKkd1CEQAaRMN5mglFNo9jynix9Dk9uAoX3yOv7dvz",
         },
     },
     .paths = .{

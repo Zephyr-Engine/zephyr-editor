@@ -1,4 +1,4 @@
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 const std = @import("std");
 const ui = @import("zGUI");
 
@@ -6,13 +6,13 @@ const ui_runtime = @import("ui/zgui_runtime_backend.zig");
 
 const ViewportTarget = @This();
 
-device: *zp.Device,
-framebuffer: zp.Framebuffer,
-color_view: zp.TextureView,
+device: *fusion.Device,
+framebuffer: fusion.Framebuffer,
+color_view: fusion.TextureView,
 pixel_size: ui_runtime.PixelSize = .{ .width = 1, .height = 1 },
 renderable: bool = false,
 
-pub fn init(device: *zp.Device) !ViewportTarget {
+pub fn init(device: *fusion.Device) !ViewportTarget {
     var framebuffer = try device.createFramebuffer(1, 1);
     errdefer device.destroyFramebuffer(&framebuffer);
     return .{
@@ -49,7 +49,7 @@ pub fn nativeTextureId(self: *const ViewportTarget) u32 {
     return self.device.textureViewNativeId(self.color_view);
 }
 
-pub fn renderTarget(self: *ViewportTarget) ?*zp.Framebuffer {
+pub fn renderTarget(self: *ViewportTarget) ?*fusion.Framebuffer {
     return if (self.renderable) &self.framebuffer else null;
 }
 

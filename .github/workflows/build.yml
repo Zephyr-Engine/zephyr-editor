@@ -39,9 +39,9 @@ jobs:
 
       # build.zig.zon deliberately uses sibling checkouts during development.
       # Recreate that layout on each hosted runner.
-      - name: Checkout zephyr-runtime
+      - name: Checkout fusion-runtime
         shell: bash
-        run: git clone --depth 1 https://github.com/Zephyr-Engine/zephyr-runtime.git ../zephyr-runtime
+        run: git clone --depth 1 https://github.com/Fusion-Engine-Labs/fusion-runtime.git ../fusion-runtime
 
       - name: Build project
         shell: bash

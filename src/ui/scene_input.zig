@@ -1,5 +1,5 @@
 const ui = @import("zGUI");
-const zp = @import("zephyr_runtime");
+const fusion = @import("fusion_runtime");
 
 const SceneInputCapture = @This();
 
@@ -9,11 +9,11 @@ pub fn reset(self: *SceneInputCapture) void {
     self.active = false;
 }
 
-pub fn accepts(self: *SceneInputCapture, event: zp.ZEvent, viewport_rect: ui.Rect, mouse_pos: ui.Vec2, ui_owns_mouse: bool) bool {
+pub fn accepts(self: *SceneInputCapture, event: fusion.ZEvent, viewport_rect: ui.Rect, mouse_pos: ui.Vec2, ui_owns_mouse: bool) bool {
     return self.acceptsWithUi(event, viewport_rect, mouse_pos, .{ .wants_mouse = ui_owns_mouse });
 }
 
-pub fn acceptsWithUi(self: *SceneInputCapture, event: zp.ZEvent, viewport_rect: ui.Rect, mouse_pos: ui.Vec2, ui_capture: ui.InputCapture) bool {
+pub fn acceptsWithUi(self: *SceneInputCapture, event: fusion.ZEvent, viewport_rect: ui.Rect, mouse_pos: ui.Vec2, ui_capture: ui.InputCapture) bool {
     const scene_target = viewport_rect.contains(mouse_pos) and !ui_capture.wants_mouse;
     return switch (event) {
         .MouseMove => true,
@@ -39,8 +39,8 @@ pub fn acceptsWithUi(self: *SceneInputCapture, event: zp.ZEvent, viewport_rect: 
 
 pub fn processSceneEvents(
     self: *SceneInputCapture,
-    input: *zp.Input,
-    runtime_events: []const zp.ZEvent,
+    input: *fusion.Input,
+    runtime_events: []const fusion.ZEvent,
     viewport_rect: ui.Rect,
     mouse_pos: ui.Vec2,
     ui_capture: ui.InputCapture,
@@ -136,9 +136,9 @@ test "reset clears active capture" {
 }
 
 test "processSceneEvents forwards only accepted events to input" {
-    var input: zp.Input = .{};
+    var input: fusion.Input = .{};
     var capture: SceneInputCapture = .{};
-    const events = [_]zp.ZEvent{
+    const events = [_]fusion.ZEvent{
         .{ .MousePressed = .Left },
         .{ .CharInput = 'x' },
     };
@@ -150,9 +150,9 @@ test "processSceneEvents forwards only accepted events to input" {
 }
 
 test "focused editor field keeps keyboard events out of scene input" {
-    var input: zp.Input = .{};
+    var input: fusion.Input = .{};
     var capture: SceneInputCapture = .{};
-    const events = [_]zp.ZEvent{
+    const events = [_]fusion.ZEvent{
         .{ .KeyPressed = .A },
         .{ .KeyRepeated = .Backspace },
         .{ .KeyReleased = .A },
