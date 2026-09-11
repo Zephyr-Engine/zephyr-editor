@@ -44,7 +44,6 @@ test {
     _ = @import("editor/application.zig");
     _ = @import("game_systems.zig");
     _ = @import("state/play_state.zig");
-    _ = @import("ui/editor_theme.zig");
     _ = @import("ui/scene_input.zig");
     _ = @import("platform/native_file_dialog.zig");
     _ = @import("ui/viewport.zig");

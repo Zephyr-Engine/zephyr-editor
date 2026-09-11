@@ -1,7 +1,6 @@
 const std = @import("std");
 const ui = @import("zGUI");
 
-const editor_theme = @import("editor_theme.zig");
 const panel = @import("panel.zig");
 
 pub const Workspace = @This();
@@ -19,7 +18,6 @@ entries: std.ArrayList(Entry) = .empty,
 index: std.AutoHashMapUnmanaged(panel.Id, usize) = .empty,
 
 pub fn init(allocator: std.mem.Allocator, state: *ui.Ui, services: panel.Services) !Workspace {
-    state.setTheme(editor_theme.theme());
     try state.setStyle(state.rootNode(), state.theme.style(.{
         .width = .fill,
         .height = .fill,
