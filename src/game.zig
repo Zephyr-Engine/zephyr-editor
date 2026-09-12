@@ -9,7 +9,7 @@ pub const definition = fusion.Game{
         editor_components.FlyCameraController,
         game_components.KeyboardMovementComponent,
     },
-    .update_schedule = .{
+    .fixed_update_schedule = .{
         .update = &.{
             game_systems.keyboardMovementSystem,
         },
