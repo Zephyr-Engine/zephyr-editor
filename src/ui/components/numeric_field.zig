@@ -4,10 +4,6 @@ const zimp = @import("zimp");
 
 const EditorHints = zimp.scene.EditorFieldHints;
 
-/// `IntField`, `UintField` and `FloatField` are the same control — a numeric
-/// text field with an optional bound slider and live preview while typing —
-/// differing only in scalar type and in whether slider output needs rounding.
-/// Generating them keeps that behaviour written once.
 fn NumericField(comptime T: type) type {
     return struct {
         const Self = @This();

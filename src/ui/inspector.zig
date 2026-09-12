@@ -341,6 +341,8 @@ fn renderComponent(self: *Inspector, state: *ui.Ui, parent: ui.NodeId, component
             self.allocator,
             state,
             body,
+            self.overlay_node,
+            &self.scenes.runtime.assets,
             component.type_id,
             field_schema,
             value,

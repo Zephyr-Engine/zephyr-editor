@@ -1,10 +1,12 @@
 const std = @import("std");
 const ui = @import("zGUI");
 const zimp = @import("zimp");
+const fusion = @import("fusion_runtime");
 
 const ReferenceField = @import("reference_field.zig").ReferenceField;
 const ReadonlyField = @import("readonly_field.zig").ReadonlyField;
 const BooleanField = @import("boolean_field.zig").BooleanField;
+const AssetPicker = @import("asset_picker.zig").AssetPicker;
 const VectorField = @import("vector_field.zig").VectorField;
 const EnumField = @import("enum_field.zig").EnumField;
 const TextField = @import("text_field.zig").TextField;
@@ -31,12 +33,15 @@ pub const InspectorField = struct {
         reference: ReferenceField,
         enumeration: EnumField,
         readonly: ReadonlyField,
+        asset_picker: AssetPicker,
     };
 
     pub fn init(
         allocator: std.mem.Allocator,
         state: *ui.Ui,
         parent: ui.NodeId,
+        overlay_host: ui.NodeId,
+        assets: *const fusion.AssetManager,
         component_id: zimp.ComponentTypeId,
         schema: *const FieldSchema,
         value: Value,
@@ -71,7 +76,7 @@ pub const InspectorField = struct {
             .component_id = component_id,
             .schema = schema,
             .present = present,
-            .control = try initControl(allocator, state, root, schema, value),
+            .control = try initControl(allocator, state, root, overlay_host, assets, schema, value),
         };
     }
 
@@ -92,6 +97,7 @@ pub const InspectorField = struct {
             .vector => |*control| if (try control.update(state, self.schema.editor)) control.value() else null,
             .reference => |*control| try control.update(state),
             .enumeration => |*control| if (try control.update(state)) Value{ .u32 = control.value } else null,
+            .asset_picker => |*control| if (try control.update(state)) |id| Value{ .asset_ref = id } else null,
             .readonly => null,
         };
     }
@@ -100,6 +106,8 @@ pub const InspectorField = struct {
         allocator: std.mem.Allocator,
         state: *ui.Ui,
         parent: ui.NodeId,
+        overlay_host: ui.NodeId,
+        assets: *const fusion.AssetManager,
         schema: *const FieldSchema,
         value: Value,
     ) !Control {
@@ -115,7 +123,15 @@ pub const InspectorField = struct {
             .vec2 => .{ .vector = try VectorField.init(allocator, state, parent, value.vec2[0..], hints) },
             .vec3 => .{ .vector = try VectorField.init(allocator, state, parent, value.vec3[0..], hints) },
             .quat => .{ .vector = try VectorField.init(allocator, state, parent, value.quat[0..], hints) },
-            .asset_ref => .{ .reference = try ReferenceField.initAsset(allocator, state, parent, value.asset_ref) },
+            .asset_ref => |kind| .{ .asset_picker = try AssetPicker.init(
+                allocator,
+                state,
+                parent,
+                overlay_host,
+                &assets.manifest,
+                kind,
+                value.asset_ref,
+            ) },
             .entity_ref => .{ .reference = try ReferenceField.initEntity(allocator, state, parent, value.entity_ref) },
             .enum_ref => |enum_schema| .{ .enumeration = try EnumField.init(state, parent, value.u32, enum_schema) },
         };
